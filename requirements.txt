@@ -1,0 +1,13 @@
+# Museme - stack minimal reellement utilise par l'app.
+# Migre de Python 3.7 / Dash 1.19 (2021) vers Python 3.12.
+# Versions epinglees : verifiees fonctionnelles le 2026-08-28.
+# Le stack audio d'origine (librosa, numba, llvmlite, moviepy, ShazamAPI,
+# resampy, soundfile, sounddevice, pydub, imageio, wget, matplotlib) a ete
+# retire : il etait importe mais jamais appele, et ne compile pas en 3.12.
+
+dash==4.4.1
+dash-bootstrap-components==2.0.4
+pandas==3.0.5
+numpy==2.5.2
+scikit-learn==1.9.0
+plotly==7.0.0

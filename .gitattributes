@@ -1,0 +1,11 @@
+# Sources normalisees en LF dans le depot (dev Windows, hebergement Linux).
+* text=auto eol=lf
+
+# Donnees et medias : jamais de reecriture des fins de ligne.
+*.csv  -text
+*.mp4  -text
+*.mp3  -text
+*.mid  -text
+*.png  -text
+*.jpg  -text
+*.ico  -text

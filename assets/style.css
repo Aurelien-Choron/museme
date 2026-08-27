@@ -1,0 +1,442 @@
+body, html {
+    background: #252422;
+    font-family: Verdana;
+}
+
+/* -------- Sidebar nav ----------- */
+
+/*
+.brand-header{
+  position: absolute;
+  width:50px;
+  top:1%;
+  left:5%;
+}
+
+.logo-header{
+  position: absolute;
+  width:50px;
+  top:1%;
+  left:5%;
+}
+
+.name-header{
+}
+
+*/
+
+.menu-button{
+  position: absolute;
+  top:1%;
+  right:5%;
+}
+
+/* -----------About-us------------ */
+
+.page-title-box {
+  position: absolute;
+  top: 5%;
+  left: 45%;
+}
+
+.box-presentation-wcs {
+  position: absolute;
+  top: 75%;
+  left: 50%;
+}
+
+.legend_video_wcs {
+  font-size: 50px;
+  margin-top: 1px;
+  margin-bottom: 10px;
+  color: white
+}
+
+.video_wcs {
+  width: 400px; 
+  height: 275px;
+}
+
+.box-presentation-team{
+  position: absolute;
+  top:20%;
+  left:18%;
+}
+
+.card-title{
+  font-size:20px ;
+  text-align: center;
+}
+
+.card-text{
+  font-size: 13px ;
+  text-align: center;
+}
+
+.card-teamate{
+  width: 12rem;
+  margin-right: 5px;
+  margin-left: 5px;
+}
+
+.button-card-team{
+  margin-top: 2px;
+  margin-bottom: 2px;
+  font-size: 15px;
+}
+/* -----------Ressources------------ */
+
+.source-lib-box {
+  position: absolute;
+  top: 20%;
+  left: 10%;
+}
+
+/* -----------Summary------------ */
+
+.graph-classification {
+  width:500px;
+  position: fixed;
+  top: 32%;
+  left:50%;
+  margin-right: 150px;
+  margin-left: 20px;
+}
+
+.introduction-summary {
+  position: absolute;
+  top: 20%;
+  left:10%;
+  font-size: 15px;
+  margin-right: 200px;
+  color:white;
+  text-align:justify;
+}
+
+.bloc-summary {
+  width:500px;
+  height: 400px ;
+  position: fixed;
+  top: 32%;
+  left:10%;
+  font-size: 15px;
+}
+/* -------- Typing effect ----------- */
+
+.record-title {
+    position: absolute;
+    top: 11%;
+    left: 50%;
+    color: white;
+    width: 15em;
+    margin: 0 auto;
+    border-right: 2px solid rgba(255,255,255,.75);
+    font-size: 60px;
+    font-weight: bold;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    transform: translateY(-50%);
+    -ms-transform: translateX(-50%) translateY(-50%);
+    -webkit-transform: translate(-50%,-50%);
+    transform: translate(-50%,-50%);   
+}
+
+@media screen and (max-width: 900px) {
+    .record-title {
+      font-size: 40px;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .record-title {
+      font-size: 30px;
+    }
+}
+
+@media screen and (max-width: 500px) {
+    .record-title {
+      font-size: 25px;
+    }
+}
+
+/* Animation */
+.anim-typewriter{
+    animation: typewriter 3s steps(30) 1s 1 normal both,
+                blinkTextCursor 500ms steps(30) infinite normal;
+}
+@keyframes typewriter{
+    from{width: 0;}
+    to{width: 7em;}
+}
+@keyframes blinkTextCursor{
+    from{border-right-color: rgba(255,255,255,.75);}
+    to{border-right-color: transparent;}
+}
+
+
+/* ------------ HOME PAGE---------------------- */
+
+#background-video-first-page {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    min-width: 100%;
+    min-height: 100%;
+    object-fit: fill;
+    -webkit-filter: blur(5px);
+    -moz-filter: blur(5px);
+    -o-filter: blur(5px);
+    -ms-filter: blur(5px);
+    filter: blur(5px);
+    z-index: -1000;
+    overflow: hidden;
+}
+
+#dotted-background {
+    content: '';
+	display: block;
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	/*background: rgba(127, 127, 127, 0.5);*/
+	background-image: radial-gradient(black 33%, transparent 33%);
+    background-size: 3px 3px;
+    z-index: -999;
+}
+
+#upload-section {
+    width: 300px;
+    height: 90px;
+    line-height: 60px;
+    border-width: 2px;
+    border-style: dashed;
+    border-radius: 5px;
+    text-align: center;
+    justify-content: center;
+    margin: 0px;
+    color: white;
+    position: absolute;
+    top: 85%;
+    left: 60%;
+    -ms-transform: translateX(-50%) translateY(-50%);
+    -webkit-transform: translate(-50%,-50%);
+    transform: translate(-50%,-50%);
+    z-index: 1;
+}
+  
+  @-webkit-keyframes woong {
+    0% {
+      -webkit-trasform: scale(1.2);
+    }
+    50% {
+      -webkit-transform: scale(1.8);
+      opacity: 0.5;
+    }
+    100% {
+      -webkit-transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+  
+  @-webkit-keyframes woong-2 {
+    0% {
+      -webkit-transform: scale(1.2);
+      opacity: 0.6;
+    }
+    50% {
+      -webkit-transform: scale(1.6);
+      opacity: 0.5;
+    }
+    100% {
+      -webkit-transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+
+.onboarding-box{
+  width: 650px;
+  position: absolute;
+  top: 30%;
+  left: 30%;
+  align-items: center;
+}
+
+.main_row_onboarding_box{
+  color:white;
+  font-size: 1.6em;
+  font-weight: bold;
+  text-align:justify;
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.row_onboarding_box{
+  color:white;
+  font-size: 1.6em;
+  text-align:justify;
+}
+
+.cta-onboarding{
+  width: 300px;
+  font-size: 50px;
+  top: 60%;
+  left: 45%;
+  position:absolute;
+}
+
+/* ----- Colonne de gauche : selection + morceau choisi ----- */
+
+/* Un seul conteneur en colonne. Avant, .input-box (top 10%) et
+   .track-audio-player-box (top 40%) etaient positionnes en absolu chacun de
+   leur cote : leurs hauteurs reelles ne dependant pas de la fenetre, les deux
+   blocs se superposaient des qu'un titre etait selectionne. */
+.left-panel {
+  position: absolute;
+  top: 12%;
+  left: 6%;
+  width: 320px;
+  max-width: calc(100vw - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  z-index: 10;
+}
+
+.left-panel-loading {
+  width: 100%;
+}
+
+.input-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  /* garde les menus deroulants au-dessus de la carte du morceau */
+  position: relative;
+  z-index: 2;
+}
+
+.row_input_box {
+  color: #fff;
+  font-size: 15px;
+  font-weight: bold;
+  text-align: left;
+  margin: 0;
+  /* la video de fond passe par des plans clairs : garde le libelle lisible */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .85);
+}
+
+.museme-dropdown {
+  width: 100%;
+  color: #252422;
+}
+
+.dropdown-case{
+  width: 20px;
+}
+
+.track-audio-player-box {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 12px;
+    color: #fff;
+    line-height: 1.35;
+    text-align: center;
+    border: 2px dashed rgba(255, 255, 255, .45);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, .35);
+}
+
+.track-box-label {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    opacity: .7;
+}
+
+.track-coverhq {
+    width: 180px;
+    max-width: 100%;
+    height: auto;
+    margin: 0;
+    background-color: white;
+}
+
+.track-artist {
+    font-size: 20px;
+    font-weight: bold;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.track-title {
+    font-size: 15px;
+    margin: 0;
+    opacity: .85;
+    overflow-wrap: anywhere;
+}
+
+.track-audio-controls-bar {
+    width: 100%;
+    max-width: 260px;
+    margin: 4px 0 0;
+    padding: 0;
+}
+
+/*-----------Recommendation informations -----------*/
+
+.track-recommended-player-box{
+  width: 600px;
+  position: absolute;
+  top: 10%;
+  left: 45%;
+  /*-ms-transform: translateX(-50%) translateY(-50%);
+  -webkit-transform: translate(-50%,-50%);
+  transform: translate(-50%,-50%);
+  text-align: center;
+  z-index: 0;*/
+}
+
+.track-artist-reco {
+  font-size: 12px;
+  font-weight: bold;
+  margin-top: 2px;
+  margin-bottom: 1px;
+}
+
+.track-title-reco {
+  font-size: 10px;
+  margin-top: 2px;
+  margin-bottom: 1px;
+}
+
+.track-cover-reco {
+  width: 50px;
+  height: auto;
+  margin-top: 1px;
+  margin-bottom: 1px;
+  background-color: white;
+}
+
+.track-audio-reco {
+  width: 200px;
+  margin: 0px;
+  padding: 0px;
+}
+
+.info-recommendation {
+  font-size: 15px;
+  font-weight: bold;
+  margin-left:5px;
+  margin-right: 5px;
+  margin-bottom: 5px;
+}

@@ -1,0 +1,17 @@
+# Blueprint Render - https://render.com/docs/blueprint-spec
+# Deploiement gratuit de Museme. Render ne lit pas le Procfile (heritage
+# Heroku) ni runtime.txt : la version de Python vient de .python-version.
+services:
+  - name: museme
+    type: web
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: >-
+      gunicorn index:server
+      --bind 0.0.0.0:$PORT
+      --workers 1
+      --threads 4
+      --timeout 120
+      --preload

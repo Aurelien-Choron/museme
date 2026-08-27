@@ -1,0 +1,3 @@
+# Dependances de deploiement uniquement (gunicorn ne tourne pas sous Windows).
+-r requirements.txt
+gunicorn
