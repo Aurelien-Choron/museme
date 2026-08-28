@@ -129,135 +129,38 @@ def audio_play_layout(track_info):
 #NEW: affihcer les 5 reco
 recommendation_input= html.Div(id="output-recommendation-upload")
 
-def recommendation_box_layout(df_for_rec):
+def _recommendation_row(rank, song, artist, preview, cover):
+    """Une ligne de recommandation : rang, pochette, textes, lecteur.
+
+    Les 10 lignes etaient ecrites a la main, chacune en dbc.Row de 4 dbc.Col
+    de largeur egale : la pochette de 50 px occupait un quart de la colonne
+    pendant que les titres longs se repliaient sur trois lignes.
+    """
+    if pd.isna(cover):
+        # 61 morceaux du catalogue n'ont pas de pochette
+        vignette = html.Div("♪", className="track-cover-reco track-cover-missing")
+    else:
+        vignette = html.Img(src=cover, className="track-cover-reco", alt="")
+
     return html.Div([
-            dbc.Row([
-                    html.H1("Check out the most similar tracks:",
-                    className='info-recommendation')
-            ]),
-            
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[0],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[0], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[0], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[0], controls=True, autoPlay=False, className="track-audio-reco")),
-                
-            ]),
-                
-             dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[1],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[1], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[1], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[1], controls=True, autoPlay=False, className="track-audio-reco")),
-                
-            ]),
+        html.Span(f"{rank:02d}", className="reco-rank"),
+        vignette,
+        html.Div([
+            html.Div(song, className="track-title-reco"),
+            html.Div(artist, className="track-artist-reco"),
+        ], className="reco-text"),
+        html.Audio(src=preview, controls=True, autoPlay=False, className="track-audio-reco"),
+    ], className="reco-row")
 
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[2],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[2], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[2], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[2], controls=True, autoPlay=False, className="track-audio-reco")),
-                
-            ]),
 
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[3],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[3], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[3], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[3], controls=True, autoPlay=False, className="track-audio-reco")),
-                
-            ]),
-
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[4],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[4], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[4], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[4], controls=True, autoPlay=False, className="track-audio-reco")),
-            
-            ]),
-
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[5],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[5], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[5], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[5], controls=True, autoPlay=False, className="track-audio-reco")),
-            
-            ]),
-
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[6],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[6], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[6], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[6], controls=True, autoPlay=False, className="track-audio-reco")),
-
-            ]),
-
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[7],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[7], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[7], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[7], controls=True, autoPlay=False, className="track-audio-reco")),        
-            ]),
-
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[8],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[8], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[8], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[8], controls=True, autoPlay=False, className="track-audio-reco")),
-
-            ]),
-
-            dbc.Row([
-                dbc.Col(
-                    html.Img(src=df_for_rec.Cover.iloc[9],className='track-cover-reco')),
-                dbc.Col(
-                    html.H5(df_for_rec.Song.iloc[9], className="track-title-reco")),
-                dbc.Col(
-                    html.H5(df_for_rec.Artist.iloc[9], className="track-artist-reco")),
-                dbc.Col(
-                    html.Audio(src=df_for_rec.Preview.iloc[9], controls=True, autoPlay=False, className="track-audio-reco")),
-
-            ]) 
-
-            ], className="track-recommended-player-box", style={'color':'white'})
-        
-
+def recommendation_box_layout(df_for_rec):
+    lignes = [
+        _recommendation_row(rang, r.Song, r.Artist, r.Preview, r.Cover)
+        for rang, r in enumerate(df_for_rec.head(10).itertuples(), start=1)
+    ]
+    return html.Div(
+        [html.H2("Check out the most similar tracks:", className="info-recommendation")] + lignes,
+        className="track-recommended-player-box")
 
 
 # La colonne de gauche empile le bloc de selection puis la carte du morceau
@@ -277,6 +180,11 @@ left_panel = html.Div([
 ], className="left-panel")
 
 
+# Meme principe a droite : un conteneur qui borne la hauteur et defile, au lieu
+# d'un bloc absolu dont les dernieres lignes sortaient de l'ecran.
+right_panel = html.Div([recommendation_input], className="right-panel")
+
+
 layout = html.Div([
     
     #logo_header, 
@@ -294,7 +202,7 @@ layout = html.Div([
 
     left_panel,
 
-    recommendation_input,
+    right_panel,
     
 ], id="main-layout")
 

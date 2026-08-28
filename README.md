@@ -93,6 +93,10 @@ Changements apportes pour l'hebergement et le rendu :
 | Similarite calculee sur une seule ligne | `components/engine/functions.py` | la matrice complete 3 815 x 3 815 faisait 116 Mo, doublee par la copie DataFrame : pic a 243 Mo par requete. La matrice etant symetrique, le resultat est identique |
 | Catalogue et descripteurs mis en cache (`lru_cache`) | `components/engine/functions.py` | le CSV de 5 Mo etait relu a chaque callback |
 | Chemins de donnees absolus | `components/engine/functions.py` | les chemins relatifs supposaient que le repertoire courant soit la racine du projet |
+| Colonne de recommandations dans `.right-panel`, bornee et defilante | `components/layout/home.py`, `assets/style.css` | le bloc etait absolu et sans limite de hauteur : ses dernieres lignes sortaient de l'ecran, et le corps de page (entierement en absolu, donc de hauteur nulle) n'offrait aucun defilement pour les atteindre |
+| Fond sombre translucide sous les recommandations | `assets/style.css` | le texte blanc devenait illisible sur les plans clairs de la video |
+| Lignes de recommandation generees par une boucle, en grille CSS | `components/layout/home.py` | les 10 lignes etaient ecrites a la main en `dbc.Row` de 4 colonnes de largeur egale : la pochette de 50 px occupait un quart de la largeur pendant que les titres longs se repliaient sur trois lignes |
+| Pochette de remplacement quand `Cover` est absent | `components/layout/home.py` | 61 morceaux du catalogue n'ont pas de pochette : le code produisait `<img src="nan">`, donc une icone d'image cassee |
 | Video de fond reencodee : 179 Mo -> 5,7 Mo | `assets/videos/background.mp4` | au-dela de la limite de 100 Mo par fichier de GitHub. 854x480, sans piste audio, avec un flou leger a l'encodage — invisible puisque le CSS applique deja `blur(5px)` |
 
 Effet sur la recommandation, mesure sur 7 titres (dont un titre duplique) :
@@ -107,9 +111,6 @@ Points connus, laisses en l'etat :
   colonnes du CSV. Sans consequence sur les resultats.
 - Le passage de Bootstrap 4 a 5 peut induire de legers ecarts visuels ;
   l'essentiel du design vient de `assets/style.css`.
-- La colonne de recommandations (`.track-recommended-player-box`, a droite)
-  est encore positionnee en absolu : ses dernieres lignes sortent de l'ecran
-  sur une fenetre basse, sans possibilite de defiler. Non traite ici.
 
 ## Video de fond
 

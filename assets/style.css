@@ -394,49 +394,123 @@ body, html {
 
 /*-----------Recommendation informations -----------*/
 
-.track-recommended-player-box{
-  width: 600px;
+/* Conteneur borne en hauteur et defilant. Le bloc etait positionne en absolu
+   sans limite : ses dernieres lignes sortaient de l'ecran, et le corps de page
+   (entierement en absolu, donc de hauteur nulle) n'offrait aucun defilement
+   pour les atteindre. Le calage horizontal suit la geometrie de .left-panel
+   (left 6% + 320px de large) pour qu'aucune largeur de fenetre ne fasse
+   chevaucher les deux colonnes. */
+.right-panel {
   position: absolute;
-  top: 10%;
-  left: 45%;
-  /*-ms-transform: translateX(-50%) translateY(-50%);
-  -webkit-transform: translate(-50%,-50%);
-  transform: translate(-50%,-50%);
-  text-align: center;
-  z-index: 0;*/
+  top: 12%;
+  left: calc(6% + 344px);
+  right: 4%;
+  max-height: 78vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: 5;
+}
+
+.track-recommended-player-box{
+  width: 100%;
+  box-sizing: border-box;
+  color: #fff;
+  padding: 16px 20px 20px;
+  border-radius: 10px;
+  /* la video de fond passe par des plans clairs : sans ce fond, le texte
+     blanc des recommandations devenait illisible */
+  background: rgba(0, 0, 0, .55);
+}
+
+.info-recommendation {
+  font-size: 17px;
+  font-weight: bold;
+  margin: 0 0 10px;
+}
+
+.reco-row {
+  display: grid;
+  grid-template-columns: 26px 56px minmax(0, 1fr) minmax(190px, 250px);
+  align-items: center;
+  gap: 14px;
+  padding: 9px 0;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+}
+
+.reco-rank {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: .5;
+  text-align: right;
+}
+
+.track-cover-reco {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin: 0;
+  background-color: rgba(255, 255, 255, .1);
+}
+
+/* 61 morceaux du catalogue n'ont pas de pochette */
+.track-cover-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  opacity: .45;
+}
+
+.reco-text {
+  min-width: 0;
+}
+
+.track-title-reco {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  /* les titres longs sont tronques plutot que replies sur trois lignes */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .track-artist-reco {
   font-size: 12px;
-  font-weight: bold;
-  margin-top: 2px;
-  margin-bottom: 1px;
-}
-
-.track-title-reco {
-  font-size: 10px;
-  margin-top: 2px;
-  margin-bottom: 1px;
-}
-
-.track-cover-reco {
-  width: 50px;
-  height: auto;
-  margin-top: 1px;
-  margin-bottom: 1px;
-  background-color: white;
+  opacity: .7;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .track-audio-reco {
-  width: 200px;
-  margin: 0px;
-  padding: 0px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
-.info-recommendation {
-  font-size: 15px;
-  font-weight: bold;
-  margin-left:5px;
-  margin-right: 5px;
-  margin-bottom: 5px;
+/* Fenetre etroite : le lecteur passe sous le texte au lieu de l'ecraser */
+@media screen and (max-width: 1150px) {
+  .reco-row {
+    grid-template-columns: 26px 56px minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .track-audio-reco {
+    grid-column: 2 / -1;
+    max-width: 340px;
+  }
+}
+
+/* Barre de defilement discrete sur la colonne de droite */
+.right-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.right-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .25);
+  border-radius: 4px;
 }
