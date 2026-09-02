@@ -1,7 +1,8 @@
 # Museme
 
 A Dash app that recommends music by cosine similarity, over a catalogue of
-3,815 tracks described by 66 audio features (`data/df_recommendation.csv`).
+3,815 tracks described by 63 audio descriptors computed from the raw signal
+(`data/df_recommendation.csv`).
 
 **[➡ Live demo](https://museme-s4u2.onrender.com)**
 *(Render's free tier sleeps after 15 min of inactivity — the first load takes
@@ -12,6 +13,51 @@ August 2026 on Python 3.12 — see [Migration](#migration-2021---2026), which is
 where most of the interesting work is.
 
 ![Museme recommending tracks similar to Daft Punk's "Get Lucky"](docs/screenshot.png)
+
+## Where the data comes from
+
+The catalogue is not an off-the-shelf dataset — it was assembled for this project
+in 2021.
+
+1. **Scraped from Spotify** — artist, album, title, genre tag, cover art and the
+   30-second preview MP3 of each track. The `Preview` and `Cover` columns still
+   carry those CDN links (`p.scdn.co`, `i.scdn.co`), and they are what the app
+   plays and displays today.
+2. **Genre families** — Spotify's own tags are fine-grained and sparse (`mpb`,
+   `nu jazz`, `deep house`...), so they were grouped by hand into broader families
+   in `family_genre`. Nothing groups usefully at Spotify's granularity.
+3. **Audio descriptors, computed from the signal** — every preview was decoded and
+   reduced with [`librosa`](https://librosa.org) to **63 descriptors**, almost all
+   of them derived from the Short-Time Fourier Transform of the waveform:
+
+   | Descriptor | What it measures |
+   |---|---|
+   | `chroma_stft` | energy per pitch class, read straight off the STFT |
+   | `spectral_centroid` | where the centre of mass of the spectrum sits — "brightness" |
+   | `spectral_bandwidth` | how spread out the spectrum is around that centre |
+   | `rolloff` | the frequency below which 85% of the energy falls |
+   | `spectral_contrast` | peak-to-valley difference within each sub-band |
+   | `mfcc1` … `mfcc20` | discrete cosine transform of the log-mel spectrum: timbre |
+   | `tonnetz` | position in tonal space (fifths, thirds) |
+   | `harmony`, `onset`, `polyfeat` | harmonic content, note attacks, spectral slope |
+   | `rms`, `zero_crossing_rate`, `tempo` | loudness, noisiness, beats per minute |
+
+   Every one of them except `tempo` is kept as **both mean and variance** over the
+   preview — 31 quantities x 2, plus tempo, is the 63. A track is therefore
+   described by its average colour *and* by how much that colour moves, which is
+   what separates a steady ambient piece from a track that changes texture.
+
+4. **Recommendation** — the descriptors are standardised, then ranked by cosine
+   similarity. Two tracks are close when their spectral shape and timbre are close,
+   which is why the results cross genre boundaries: the model never sees the genre
+   tag.
+
+`data/df_66features_clean2.csv` holds the features for 4,950 tracks; the
+recommendation catalogue (`data/df_recommendation.csv`) keeps 3,815 of them.
+
+> Only the output of that pipeline is version-controlled here, not the 2021
+> scraping and extraction scripts themselves. Re-running the extraction took hours
+> of audio decoding, which is precisely why the results were committed as CSVs.
 
 ## Running it
 
