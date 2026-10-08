@@ -16,7 +16,7 @@ FEATURES_CSV = os.path.join(DATA_DIR, "df_66features_clean2.csv")
 
 @functools.lru_cache(maxsize=1)
 def load_catalog():
-  """Catalogue des 3 815 morceaux, lu une seule fois par processus.
+  """Catalogue des morceaux, lu une seule fois par processus.
 
   Le CSV pese 5 Mo et etait relu a chaque callback.
   """

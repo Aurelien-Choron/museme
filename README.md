@@ -1,7 +1,8 @@
 # Museme
 
 Application Dash de recommandation musicale par similarite cosinus, sur un
-corpus de 3 815 morceaux decrits par 66 descripteurs audio (`data/df_recommendation.csv`).
+corpus de 4 724 morceaux decrits par 63 descripteurs audio (`data/df_recommendation.csv`) :
+3 815 collectes en 2021, 909 ajoutes en octobre 2026 (voir *Alimenter le catalogue*).
 
 Projet d'origine : 2021, Python 3.7 / Dash 1.19.
 Remis en fonctionnement en aout 2026 sur Python 3.12 (voir *Migration* plus bas).
@@ -43,8 +44,66 @@ data/                 les deux CSV (features + recommandation)
 assets/               CSS, images, favicon, video de fond (servis par Dash)
 audio/                dossiers de travail de l'app d'origine
 legacy/               scripts hors application, conserves pour reference
+pipeline/             alimentation du catalogue (local, jamais deploye)
 render.yaml           blueprint de deploiement Render
+requirements-pipeline.txt   dependances du pipeline (librosa...)
 ```
+
+## Alimenter le catalogue
+
+Le dossier `pipeline/` ajoute des morceaux a `data/df_recommendation.csv`.
+Il tourne en local uniquement : librosa et numba ne sont pas deployes.
+Prerequis en plus de l'app : `ffmpeg` dans le PATH.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-pipeline.txt
+.\.venv\Scripts\python.exe -m pipeline validate  # l'extracteur redonne-t-il les vecteurs de 2021 ?
+.\.venv\Scripts\python.exe -m pipeline collect   # morceaux des playlists de pipeline/playlists.csv
+.\.venv\Scripts\python.exe -m pipeline extract   # 63 descripteurs par morceau
+.\.venv\Scripts\python.exe -m pipeline merge     # ajout au CSV (--dry-run pour verifier)
+```
+
+Le cache audio, les pages Spotify et les sorties intermediaires vont dans
+`%LOCALAPPDATA%\museme\` (variable `MUSEME_WORK_DIR` pour changer), hors
+OneDrive. `collect` et `extract` reprennent la ou ils se sont arretes.
+
+Points a connaitre :
+
+- **Les descripteurs reproduisent ceux de 2021, bugs compris.** Le code
+  d'extraction d'origine a ete retrouve (`Downloads\66_features.ipynb`,
+  `_archive\Dash_music\music2\components\engine\functions.py`) et porte dans
+  `pipeline/features_legacy.py`. Ses particularites sont conservees
+  volontairement pour qu'un meme morceau donne le meme vecteur :
+  audio en entiers 16 bits non normalises, MP3 stereo entrelace et analyse
+  comme du mono a 22 050 Hz, `mfcc{k}` = statistiques des k *premiers*
+  coefficients. Les changements de librosa 0.8 -> 0.11 sont neutralises (la
+  CQT de 0.8.1 est reprise dans `pipeline/_cqt08.py`).
+  `validate` le verifie sur 45 morceaux du catalogue : ecart maximal de
+  7e-5 ecart-type, 10 recommandations sur 10 identiques.
+- **Source : pages embed publiques de Spotify** (`open.spotify.com/embed/...`).
+  L'API Web ne donne plus d'extraits depuis novembre 2024 et exige un compte
+  Premium depuis mars 2026. Les pages embed fournissent l'extrait de 30 s sans
+  compte, au meme format que le catalogue, mais ne sont pas une API : elles
+  peuvent changer ou disparaitre sans preavis, et cet usage n'est pas couvert
+  par les conditions developpeur de Spotify.
+- **Les nouveaux morceaux n'ont pas de genre** (`Main_Genre` et
+  `family_genre` vides). Les playlists de tops n'en donnent pas, et un
+  classifieur entraine sur les descripteurs du catalogue de 2021
+  (`HistGradientBoostingClassifier`, 23 % de bonnes reponses sur 77 genres en
+  validation croisee) se trompait nettement sur les tubes recents : par
+  exemple *Die With A Smile* classe `cantopop` a 94 %. Un genre vide donne
+  des indicatrices nulles dans l'espace de similarite et n'est affiche nulle
+  part. Le classifieur est a refaire, dans un notebook.
+  Consequence en attendant : ces indicatrices nulles forment de fait un genre
+  commun aux 909 nouveaux morceaux, qui ne se recommandent presque qu'entre eux
+  (99,7 % de leurs recommandations), tandis que les anciens n'en recoivent
+  presque jamais (1,2 %).
+- **La fusion ajoute des lignes sans reecrire le fichier** : les lignes
+  existantes restent identiques octet pour octet, et le schema ne change pas
+  (une colonne de plus casserait `_similarity_space`).
+- **Prochaine etape envisagee** : une version corrigee des descripteurs
+  (mono, audio normalise, vrais MFCC par coefficient), recalculee sur tout le
+  catalogue, a comparer sur la qualite des recommandations avant de basculer.
 
 ## Deploiement (Render, offre gratuite)
 

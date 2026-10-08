@@ -1,0 +1,15 @@
+# Pipeline d'alimentation du catalogue (python -m pipeline), en local uniquement.
+# Jamais installe sur Render, qui n'installe que requirements-deploy.txt.
+# Versions verifiees le 2026-10-07 : avec elles, la porte de validation
+# (python -m pipeline validate) redonne les vecteurs de 2021 a 1e-4 pres.
+# Necessite ffmpeg dans le PATH (decodage MP3 par pydub).
+
+-r requirements.txt
+librosa==0.11.0
+scipy==1.18.1
+numba==0.68.0
+resampy==0.4.3
+soxr==1.1.0
+soundfile==0.14.0
+pydub==0.25.1
+requests==2.34.2
