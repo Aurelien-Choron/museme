@@ -1,8 +1,10 @@
 # Museme
 
 Application Dash de recommandation musicale par similarite cosinus, sur un
-corpus de 4 724 morceaux decrits par 63 descripteurs audio (`data/df_recommendation.csv`) :
-3 815 collectes en 2021, 909 ajoutes en octobre 2026 (voir *Alimenter le catalogue*).
+corpus de 4 724 morceaux (`data/df_recommendation.csv`) : 3 815 collectes en
+2021, 909 ajoutes en octobre 2026 (voir *Alimenter le catalogue*). Chaque
+morceau est decrit par le son de son extrait de 30 s (vecteur CLAP de 512
+dimensions, `data/embeddings_clap.npy`) et par son genre Deezer.
 
 Projet d'origine : 2021, Python 3.7 / Dash 1.19.
 Remis en fonctionnement en aout 2026 sur Python 3.12 (voir *Migration* plus bas).
@@ -41,8 +43,8 @@ index.py            point d'entree : layout, routage, callbacks
 components/
   engine/functions.py   extraction des donnees + recommandation cosinus
   layout/               une page par fichier (home, summary, about_us, ressources)
-data/                 les deux CSV (features + recommandation), genres de 2021
-notebooks/            classifieur de genre (genres Deezer, cercle des genres)
+data/                 catalogue (df_recommendation.csv), vecteurs CLAP, genres Deezer et de 2021
+notebooks/            classifieur de genre, banc d'essai audio (evaluation_audio.ipynb)
 docs/                 cercle des genres, etat des lieux de la recommandation (recommandation.md)
 assets/               CSS, images, favicon, video de fond (servis par Dash)
 audio/                dossiers de travail de l'app d'origine
@@ -54,9 +56,11 @@ requirements-pipeline.txt   dependances du pipeline (librosa...)
 
 ## Alimenter le catalogue
 
-Le dossier `pipeline/` ajoute des morceaux a `data/df_recommendation.csv`.
-Il tourne en local uniquement : librosa et numba ne sont pas deployes.
-Prerequis en plus de l'app : `ffmpeg` dans le PATH.
+Le dossier `pipeline/` ajoute des morceaux a `data/df_recommendation.csv`,
+puis leurs vecteurs CLAP a `data/embeddings_clap.npy`. Il tourne en local
+uniquement : librosa, numba, torch et transformers ne sont pas deployes.
+Prerequis en plus de l'app : `ffmpeg` dans le PATH, et torch en version CPU
+(voir `requirements-pipeline.txt`).
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-pipeline.txt
@@ -64,12 +68,15 @@ Prerequis en plus de l'app : `ffmpeg` dans le PATH.
 .\.venv\Scripts\python.exe -m pipeline collect   # morceaux des playlists de pipeline/playlists.csv
 .\.venv\Scripts\python.exe -m pipeline extract   # 63 descripteurs par morceau
 .\.venv\Scripts\python.exe -m pipeline merge     # ajout au CSV (--dry-run pour verifier)
+.\.venv\Scripts\python.exe -m pipeline embeddings # vecteurs CLAP des nouveaux morceaux -> data/embeddings_clap.npy
 .\.venv\Scripts\python.exe -m pipeline deezer    # genres Deezer, pour notebooks/classifieur_genre.ipynb
 ```
 
 Le cache audio, les pages Spotify et les sorties intermediaires vont dans
 `%LOCALAPPDATA%\museme\` (variable `MUSEME_WORK_DIR` pour changer), hors
-OneDrive. `collect` et `extract` reprennent la ou ils se sont arretes.
+OneDrive. `collect`, `extract` et `embeddings` reprennent la ou ils se sont
+arretes. **Apres `merge`, lancer `embeddings`** : l'app refuse de demarrer si
+un morceau n'a pas de vecteur CLAP (environ 2 s par morceau sur CPU).
 
 Points a connaitre :
 
@@ -102,14 +109,22 @@ Points a connaitre :
   honky-tonk de 2021 forment le genre `Country`. 27 morceaux ajoutes restent
   sans genre. Les etiquettes de 2021 (77 « genre seeds » Spotify, bruitees
   au niveau de l'artiste) sont gardees dans `data/genres_2021.csv`.
-- **La recommandation part de l'audio, le genre l'aide** : l'app ajoute aux
-  63 descripteurs 17 colonnes de genre (`components/engine/functions.py`) :
-  le genre principal, les genres Deezer de l'album en secondaire
+- **La recommandation part de l'audio, le genre l'aide.** L'audio est decrit
+  par le modele pre-entraine CLAP de LAION (`laion/larger_clap_general`,
+  Apache 2.0) : 512 dimensions par morceau, calculees en local par
+  `python -m pipeline embeddings`. L'app ne lit que les vecteurs
+  (`data/embeddings_clap.npy`) : Render n'a pas besoin de torch. CLAP a ete
+  retenu le 2026-10-10 face aux 63 descripteurs de 2021 et a leurs versions
+  corrigees, sur des mesures automatiques puis une ecoute a l'aveugle (63 %
+  de propositions jugees proches, contre 17 % pour les descripteurs de 2021).
+  L'app y ajoute 17 colonnes de genre (`components/engine/functions.py`) : le
+  genre principal, les genres Deezer de l'album en secondaire
   (`data/genres_deezer.csv`, ecrit par `python -m pipeline genre-lists`), et
   une similarite entre genres (voisins du cercle ci-dessous, Pop sur son
-  propre axe), avec un poids de 3. Resultat : 87 % des recommandations dans
-  le genre du morceau, 13 % dans un autre, surtout voisin. Reglages, tests,
-  hypotheses et retours en arriere : [`docs/recommandation.md`](docs/recommandation.md).
+  propre axe), avec un poids de 4. Resultat : 54 % des recommandations dans
+  le genre du morceau, et 66 % des morceaux retrouvent un autre titre de leur
+  artiste. Reglages, tests, ecoute et retours en arriere :
+  [`docs/recommandation.md`](docs/recommandation.md).
 - **Le cercle des genres** : deux genres voisins sont proches, et Pop, proche
   de presque tout, est au centre, voisin de tous. Il sert a juger le
   classifieur avec indulgence : predire un genre voisin du vrai genre est une
@@ -127,11 +142,9 @@ Points a connaitre :
   reponses Pop), foret aleatoire 38 % / 40 % / 74 %, kNN cosinus 36 % /
   35 % / 74 %, regression logistique 33 % / 41 % / 68 %. Le SVC est retenu.
 - **La fusion ajoute des lignes sans reecrire le fichier** : les lignes
-  existantes restent identiques octet pour octet, et le schema ne change pas
-  (une colonne de plus casserait `_similarity_space`).
-- **Prochaine etape envisagee** : une version corrigee des descripteurs
-  (mono, audio normalise, vrais MFCC par coefficient), recalculee sur tout le
-  catalogue, a comparer sur la qualite des recommandations avant de basculer.
+  existantes restent identiques octet pour octet, et le schema ne change pas.
+  Les 63 descripteurs restent calcules et ecrits dans le CSV (le classifieur
+  de genre et `validate` s'en servent), mais l'app ne les utilise plus.
 
 ## Deploiement (Render, offre gratuite)
 

@@ -2,16 +2,17 @@
 
 Le fichier n'est pas reecrit : les lignes sont ajoutees a la fin, au format
 d'origine (fins de ligne LF, flottants en repr a 17 chiffres), de sorte que
-les 3 815 lignes existantes restent identiques octet pour octet.
-Le schema ne change pas : _similarity_space (components/engine/functions.py)
-centre-reduit toutes les colonnes qu'il ne retire pas, une colonne de plus
-casserait l'app. La provenance (id Spotify, playlist) reste dans les sorties
-du pipeline.
+les lignes existantes restent identiques octet pour octet.
+Le schema ne change pas. Les 63 descripteurs restent calcules et ecrits, mais
+l'app ne s'en sert plus depuis le 2026-10-10 : elle lit un vecteur CLAP par
+ligne (data/embeddings_clap.npy) et refuse de demarrer s'il en manque un.
+Apres merge, lancer python -m pipeline embeddings. La provenance (id Spotify,
+playlist) reste dans les sorties du pipeline.
 
 Main_Genre et family_genre sont laisses vides : l'etape deezer puis le
 notebook notebooks/classifieur_genre.ipynb les remplissent (genres Deezer).
-L'app s'en accommode en attendant : un genre vide donne des indicatrices
-nulles dans l'espace de similarite, et le genre n'est affiche nulle part.
+En attendant, un genre vide donne des poids de genre nuls : le genre ne joue
+pas pour ces morceaux.
 """
 import csv
 import io
@@ -77,11 +78,5 @@ def run(dry_run=False):
     assert list(merged.columns) == columns and len(merged) == len(catalog) + len(rows)
     assert CATALOG_CSV.read_bytes().startswith(raw), "lignes existantes modifiees"
 
-    from components.engine import functions
-    functions.load_catalog.cache_clear()
-    functions._similarity_space.cache_clear()
-    df_rec, data_scaled = functions._similarity_space()
-    sample = len(catalog)  # premiere ligne ajoutee
-    recos = functions.recommandation_cosine(sample)
-    print(f"Espace de similarite : {data_scaled.shape} ; "
-          f"{len(recos)} recommandations pour {df_rec['Song'][sample]!r}")
+    print(f"{len(rows)} morceaux ajoutes. Etape suivante : python -m pipeline embeddings "
+          f"(vecteurs CLAP, sans lesquels l'app ne demarre pas).")

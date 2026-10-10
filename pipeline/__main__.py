@@ -1,9 +1,11 @@
 """python -m pipeline <etape>
 
-Ordre normal : validate -> collect -> extract -> merge.
+Ordre normal : validate -> collect -> extract -> merge -> embeddings.
+embeddings : vecteurs CLAP des nouveaux morceaux (data/embeddings_clap.npy),
+sans lesquels l'app ne demarre pas.
 Puis deezer : genres des morceaux, pour le classifieur (notebooks/),
 et genre-lists : genres secondaires de l'app (data/genres_deezer.csv).
-Banc d'essai des descripteurs (hors catalogue) : features-v2, embeddings.
+Banc d'essai (hors catalogue) : features-v2, et embeddings avec --window ou --rows.
 """
 import argparse
 import sys
@@ -36,7 +38,7 @@ def main():
     p.add_argument("--window", type=float, help="secondes analysees, a une position au hasard")
     p.add_argument("--rows", type=int, help="nombre de morceaux tires au hasard")
 
-    p = sub.add_parser("embeddings", help="banc d'essai : vecteurs CLAP musique (modele pre-entraine)")
+    p = sub.add_parser("embeddings", help="vecteurs CLAP du catalogue -> data/embeddings_clap.npy (banc d'essai avec --window / --rows)")
     p.add_argument("--window", type=float, help="secondes analysees, a une position au hasard")
     p.add_argument("--rows", type=int, help="nombre de morceaux tires au hasard")
 

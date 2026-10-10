@@ -15,6 +15,10 @@ FEATURES_CSV = os.path.join(DATA_DIR, "df_66features_clean2.csv")
 # Genres secondaires (genres Deezer de l'album), ecrits par
 # python -m pipeline genre-lists.
 GENRE_LISTS_CSV = os.path.join(DATA_DIR, "genres_deezer.csv")
+# Vecteurs audio CLAP (laion/larger_clap_general, 512 dimensions), une ligne
+# par ligne de RECOMMENDATION_CSV, ecrits par python -m pipeline embeddings.
+# Ils remplacent les 63 descripteurs du CSV depuis le 2026-10-10.
+CLAP_NPY = os.path.join(DATA_DIR, "embeddings_clap.npy")
 
 # Cercle des genres (notebooks/classifieur_genre.ipynb) : deux genres voisins
 # sont proches. Pop, proche de tous, a son propre axe : au centre du cercle,
@@ -31,8 +35,10 @@ NEIGHBOR_SIMILARITY = 0.5
 POP_SIMILARITY = 0.3
 # Poids d'un genre secondaire face a Main_Genre (qui pese 1).
 SECONDARY_GENRE_SHARE = 0.5
-# Poids du genre face aux 63 descripteurs centres-reduits.
-GENRE_WEIGHT = 3
+# Poids du genre face aux 512 dimensions CLAP centrees-reduites : 0 = audio
+# seul (46 % des recommandations dans le genre du morceau), 4 = 54 %,
+# 12 = 90 %. Avec les 63 descripteurs de 2021, le poids etait de 3.
+GENRE_WEIGHT = 4
 
 
 @functools.lru_cache(maxsize=1)
@@ -80,19 +86,25 @@ def _genre_weights(df_rec):
 
 @functools.lru_cache(maxsize=1)
 def _similarity_space():
-  """Descripteurs centres-reduits + genres, et catalogue aligne.
+  """Vecteurs CLAP centres-reduits + genres, et catalogue aligne.
 
   Ne depend pas du morceau demande : calcule une fois puis reutilise.
   Le genre n'est plus en indicatrices : centrees-reduites, elles pesaient
   jusqu'a 11 ecarts-types (genres rares) et agissaient comme un filtre.
+  Les 63 descripteurs du CSV ne servent plus ici (banc d'essai et ecoute a
+  l'aveugle du 2026-10-10, docs/recommandation.md) ; ils restent dans le CSV
+  pour pipeline/validate_legacy.py.
   """
   df_rec = load_catalog().copy()
   df_rec.drop(columns='Unnamed: 0', inplace=True)
-  data = df_rec.set_index("Song")
-  data = data.drop(columns=["Artist", "Album", "Preview", "Main_Genre", "Cover", 'family_genre'])
-  data_scaled = preprocessing.scale(data)
+  # float64 avant le centrage-reduction : memes calculs que les mesures.
+  clap = np.load(CLAP_NPY).astype(np.float64)
+  if len(clap) != len(df_rec):
+      raise ValueError(f"{CLAP_NPY} : {len(clap)} vecteurs pour {len(df_rec)} morceaux. "
+                       "Relancer python -m pipeline embeddings apres un ajout au catalogue.")
+  audio = preprocessing.scale(clap)
   genres = GENRE_WEIGHT * _genre_weights(df_rec) @ _genre_similarity_root()
-  return df_rec, np.hstack([data_scaled, genres])
+  return df_rec, np.hstack([audio, genres])
 
 
 def input_data_extraction(track_row):
