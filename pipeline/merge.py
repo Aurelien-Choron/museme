@@ -8,10 +8,10 @@ centre-reduit toutes les colonnes qu'il ne retire pas, une colonne de plus
 casserait l'app. La provenance (id Spotify, playlist) reste dans les sorties
 du pipeline.
 
-Main_Genre et family_genre sont laisses vides : le classifieur de genre est a
-refaire (le modele entraine sur le catalogue de 2021 se trompait sur les tubes
-recents). L'app s'en accommode : un genre vide donne des indicatrices nulles
-dans l'espace de similarite, et le genre n'est affiche nulle part.
+Main_Genre et family_genre sont laisses vides : l'etape deezer puis le
+notebook notebooks/classifieur_genre.ipynb les remplissent (genres Deezer).
+L'app s'en accommode en attendant : un genre vide donne des indicatrices
+nulles dans l'espace de similarite, et le genre n'est affiche nulle part.
 """
 import csv
 import io
@@ -81,7 +81,7 @@ def run(dry_run=False):
     functions.load_catalog.cache_clear()
     functions._similarity_space.cache_clear()
     df_rec, data_scaled = functions._similarity_space()
-    sample = rows["Song"].iloc[0]
+    sample = len(catalog)  # premiere ligne ajoutee
     recos = functions.recommandation_cosine(sample)
     print(f"Espace de similarite : {data_scaled.shape} ; "
-          f"{len(recos)} recommandations pour {sample!r}")
+          f"{len(recos)} recommandations pour {df_rec['Song'][sample]!r}")

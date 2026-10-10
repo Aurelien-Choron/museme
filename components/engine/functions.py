@@ -12,6 +12,27 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_DIR = os.path.join(BASE_DIR, "data")
 RECOMMENDATION_CSV = os.path.join(DATA_DIR, "df_recommendation.csv")
 FEATURES_CSV = os.path.join(DATA_DIR, "df_66features_clean2.csv")
+# Genres secondaires (genres Deezer de l'album), ecrits par
+# python -m pipeline genre-lists.
+GENRE_LISTS_CSV = os.path.join(DATA_DIR, "genres_deezer.csv")
+
+# Cercle des genres (notebooks/classifieur_genre.ipynb) : deux genres voisins
+# sont proches. Pop, proche de tous, a son propre axe : au centre du cercle,
+# il n'apportait rien et les morceaux Pop etaient recommandes sur l'audio seul.
+GENRE_CIRCLE = ["Asian Music", "R&B", "African Music", "Reggae", "Rap/Hip Hop",
+                "Latin Music", "Brazilian Music", "Jazz", "Classical", "Folk",
+                "Country", "Alternative", "Rock", "Metal", "Electro", "Dance"]
+GENRES = GENRE_CIRCLE + ["Pop"]
+# Similarite entre deux genres : 1 pour le meme genre, NEIGHBOR_SIMILARITY
+# entre voisins du cercle, POP_SIMILARITY entre Pop et chacun des autres,
+# 0 sinon. Pour rester une similarite valide : NEIGHBOR_SIMILARITY <= 0,5 et
+# POP_SIMILARITY <= racine((1 + 2 * NEIGHBOR_SIMILARITY) / 16).
+NEIGHBOR_SIMILARITY = 0.5
+POP_SIMILARITY = 0.3
+# Poids d'un genre secondaire face a Main_Genre (qui pese 1).
+SECONDARY_GENRE_SHARE = 0.5
+# Poids du genre face aux 63 descripteurs centres-reduits.
+GENRE_WEIGHT = 3
 
 
 @functools.lru_cache(maxsize=1)
@@ -23,24 +44,61 @@ def load_catalog():
   return pd.read_csv(RECOMMENDATION_CSV, sep=',')
 
 
+def _genre_similarity_root():
+  """Racine L de la similarite entre genres S (L @ L.T = S).
+
+  Un morceau aux poids de genres m devient m @ L : le produit scalaire de
+  deux morceaux vaut alors m_a . S . m_b.
+  """
+  n = len(GENRE_CIRCLE)
+  similarity = np.eye(n + 1)
+  for k in range(n):
+      similarity[k, (k + 1) % n] = similarity[(k + 1) % n, k] = NEIGHBOR_SIMILARITY
+  similarity[n, :n] = similarity[:n, n] = POP_SIMILARITY
+  values, vectors = np.linalg.eigh(similarity)
+  return vectors @ np.diag(np.sqrt(np.clip(values, 0, None))) @ vectors.T
+
+
+def _genre_weights(df_rec):
+  """Une ligne par morceau : poids des 17 genres, de norme 1.
+
+  Main_Genre pese 1, chaque genre secondaire SECONDARY_GENRE_SHARE. Un
+  morceau sans genre a une ligne nulle : le genre ne joue pas pour lui.
+  """
+  secondary = pd.read_csv(GENRE_LISTS_CSV, keep_default_na=False).set_index("row")["Genres"]
+  secondary = secondary.reindex(df_rec.index, fill_value="")
+  weights = np.zeros((len(df_rec), len(GENRES)))
+  for i, (main, others) in enumerate(zip(df_rec["Main_Genre"], secondary)):
+      for genre in others.split("|") if others else []:
+          if genre in GENRES:
+              weights[i, GENRES.index(genre)] = SECONDARY_GENRE_SHARE
+      if main in GENRES:
+          weights[i, GENRES.index(main)] = 1
+  norms = np.linalg.norm(weights, axis=1, keepdims=True)
+  return np.divide(weights, norms, out=np.zeros_like(weights), where=norms > 0)
+
+
 @functools.lru_cache(maxsize=1)
 def _similarity_space():
-  """Descripteurs centres-reduits + catalogue aligne.
+  """Descripteurs centres-reduits + genres, et catalogue aligne.
 
   Ne depend pas du morceau demande : calcule une fois puis reutilise.
+  Le genre n'est plus en indicatrices : centrees-reduites, elles pesaient
+  jusqu'a 11 ecarts-types (genres rares) et agissaient comme un filtre.
   """
   df_rec = load_catalog().copy()
-  df_rec = pd.concat([df_rec, df_rec["Main_Genre"].str.get_dummies()], axis=1)
   df_rec.drop(columns='Unnamed: 0', inplace=True)
   data = df_rec.set_index("Song")
   data = data.drop(columns=["Artist", "Album", "Preview", "Main_Genre", "Cover", 'family_genre'])
   data_scaled = preprocessing.scale(data)
-  return df_rec, data_scaled
+  genres = GENRE_WEIGHT * _genre_weights(df_rec) @ _genre_similarity_root()
+  return df_rec, np.hstack([data_scaled, genres])
 
 
-def input_data_extraction(song_input):
+def input_data_extraction(track_row):
+  """track_row : numero de ligne du catalogue (valeur de title-dropdown)."""
   df_all = load_catalog()
-  result = df_all[df_all['Song'] == song_input].copy()
+  result = df_all.loc[[track_row]].copy()
   result.reset_index(inplace=True)
   try:
       track_artist = result['Artist'][0]
@@ -69,15 +127,11 @@ def input_data_extraction(song_input):
   return track_artist, track_title, track_coverimg_hq, audio_preview,track_genre
 
 
-def recommandation_cosine(song_title):
+def recommandation_cosine(track_row):
+  """track_row : numero de ligne du catalogue, et non le titre : 54 titres
+  existent chez plusieurs artistes (Baby : Brandy et Justin Bieber)."""
   df_rec, data_scaled = _similarity_space()
-  index_input = pd.Index(list(df_rec['Song']))
-  index_input = index_input.get_loc(song_title)
-  # 31 titres sont dupliques dans le CSV: get_loc renvoie alors un masque/slice
-  if isinstance(index_input, slice):
-      index_input = index_input.start
-  elif not isinstance(index_input, (int, np.integer)):
-      index_input = int(np.flatnonzero(np.asarray(index_input))[0])
+  index_input = track_row
 
   # Une seule ligne de similarite au lieu de la matrice 3815 x 3815 (116 Mo,
   # doublee par la copie DataFrame). La matrice etant symetrique, la ligne
@@ -86,7 +140,9 @@ def recommandation_cosine(song_title):
   similarity_row = cosine_similarity(data_scaled[index_input:index_input + 1], data_scaled)[0]
   series = pd.Series(similarity_row, index=df_rec.index).sort_values(ascending=False)
   series = series.drop(index_input)
-  resultat = list(series.index)[1:12]
+  # Le morceau lui-meme est retire ci-dessus. Jusqu'au 2026-10-09, [1:12]
+  # sautait en plus le meilleur voisin (depuis 2021).
+  resultat = list(series.index)[0:11]
   output = df_rec.iloc[resultat][["Song", "Artist", "Preview", "Main_Genre", "Cover"]]
 
   return output

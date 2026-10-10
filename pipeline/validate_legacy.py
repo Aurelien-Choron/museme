@@ -22,8 +22,10 @@ MIN_RECO_OVERLAP = 9
 
 
 def similarity_matrix(catalog):
-    """Meme espace que components/engine/functions.py:_similarity_space,
-    avant centrage-reduction : descripteurs + indicatrices de Main_Genre."""
+    """Espace de l'app au moment de la validation, avant centrage-reduction :
+    descripteurs + indicatrices de Main_Genre. Depuis le 2026-10-09, l'app
+    remplace les indicatrices par la position du genre sur le cercle
+    (components/engine/functions.py:_similarity_space)."""
     df = pd.concat([catalog, catalog["Main_Genre"].str.get_dummies()], axis=1)
     data = df.drop(columns=["Unnamed: 0", "Song", "Artist", "Album", "Preview",
                             "Main_Genre", "Cover", "family_genre"])

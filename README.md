@@ -27,7 +27,8 @@ Puis ouvrir http://127.0.0.1:8050/
 
 1. Page d'accueil : video de fond + bouton *Get it, let's try*.
 2. Le clic affiche deux listes deroulantes.
-3. Choisir un artiste, puis un de ses titres.
+3. Choisir un artiste, puis un de ses titres ; ou, sans artiste, chercher
+   directement dans tous les titres (affiches « Titre — Artiste »).
 4. L'app affiche le morceau (pochette + extrait audio) et 10 recommandations.
 
 Autres pages : `/page-1` synthese + graphe Plotly, `/page-2` a propos, `/page-3` ressources.
@@ -40,7 +41,9 @@ index.py            point d'entree : layout, routage, callbacks
 components/
   engine/functions.py   extraction des donnees + recommandation cosinus
   layout/               une page par fichier (home, summary, about_us, ressources)
-data/                 les deux CSV (features + recommandation)
+data/                 les deux CSV (features + recommandation), genres de 2021
+notebooks/            classifieur de genre (genres Deezer, cercle des genres)
+docs/                 cercle des genres, etat des lieux de la recommandation (recommandation.md)
 assets/               CSS, images, favicon, video de fond (servis par Dash)
 audio/                dossiers de travail de l'app d'origine
 legacy/               scripts hors application, conserves pour reference
@@ -61,6 +64,7 @@ Prerequis en plus de l'app : `ffmpeg` dans le PATH.
 .\.venv\Scripts\python.exe -m pipeline collect   # morceaux des playlists de pipeline/playlists.csv
 .\.venv\Scripts\python.exe -m pipeline extract   # 63 descripteurs par morceau
 .\.venv\Scripts\python.exe -m pipeline merge     # ajout au CSV (--dry-run pour verifier)
+.\.venv\Scripts\python.exe -m pipeline deezer    # genres Deezer, pour notebooks/classifieur_genre.ipynb
 ```
 
 Le cache audio, les pages Spotify et les sorties intermediaires vont dans
@@ -86,18 +90,42 @@ Points a connaitre :
   compte, au meme format que le catalogue, mais ne sont pas une API : elles
   peuvent changer ou disparaitre sans preavis, et cet usage n'est pas couvert
   par les conditions developpeur de Spotify.
-- **Les nouveaux morceaux n'ont pas de genre** (`Main_Genre` et
-  `family_genre` vides). Les playlists de tops n'en donnent pas, et un
-  classifieur entraine sur les descripteurs du catalogue de 2021
-  (`HistGradientBoostingClassifier`, 23 % de bonnes reponses sur 77 genres en
-  validation croisee) se trompait nettement sur les tubes recents : par
-  exemple *Die With A Smile* classe `cantopop` a 94 %. Un genre vide donne
-  des indicatrices nulles dans l'espace de similarite et n'est affiche nulle
-  part. Le classifieur est a refaire, dans un notebook.
-  Consequence en attendant : ces indicatrices nulles forment de fait un genre
-  commun aux 909 nouveaux morceaux, qui ne se recommandent presque qu'entre eux
-  (99,7 % de leurs recommandations), tandis que les anciens n'en recoivent
-  presque jamais (1,2 %).
+- **Les genres sont ceux de Deezer**, pour tout le catalogue : 16 genres
+  Deezer (de `Pop` a `African Music`), plus `Country`. `deezer` note le genre
+  de l'album de chaque morceau sur l'API publique de Deezer (sans compte),
+  dans `%LOCALAPPDATA%\museme\out\deezer_genres.csv`. Le notebook
+  `notebooks/classifieur_genre.ipynb` corrige ces genres, complete les
+  morceaux non trouves (genre de l'artiste, ou correspondance avec le genre
+  de 2021), puis les ecrit dans `Main_Genre` et `family_genre` (meme valeur)
+  avec `pipeline/genres.py`. Deezer ne donne aucun genre aux albums country
+  (`genre_id` -1) : les 149 morceaux des genres country, bluegrass et
+  honky-tonk de 2021 forment le genre `Country`. 27 morceaux ajoutes restent
+  sans genre. Les etiquettes de 2021 (77 « genre seeds » Spotify, bruitees
+  au niveau de l'artiste) sont gardees dans `data/genres_2021.csv`.
+- **La recommandation part de l'audio, le genre l'aide** : l'app ajoute aux
+  63 descripteurs 17 colonnes de genre (`components/engine/functions.py`) :
+  le genre principal, les genres Deezer de l'album en secondaire
+  (`data/genres_deezer.csv`, ecrit par `python -m pipeline genre-lists`), et
+  une similarite entre genres (voisins du cercle ci-dessous, Pop sur son
+  propre axe), avec un poids de 3. Resultat : 87 % des recommandations dans
+  le genre du morceau, 13 % dans un autre, surtout voisin. Reglages, tests,
+  hypotheses et retours en arriere : [`docs/recommandation.md`](docs/recommandation.md).
+- **Le cercle des genres** : deux genres voisins sont proches, et Pop, proche
+  de presque tout, est au centre, voisin de tous. Il sert a juger le
+  classifieur avec indulgence : predire un genre voisin du vrai genre est une
+  erreur pardonnable. L'ordre est un choix musical, verifie sur les albums
+  Deezer qui portent plusieurs genres. Revers de Pop au centre : repondre Pop
+  n'est jamais une erreur lointaine, donc un modele qui se refugie dans Pop
+  gonfle son score « a un voisin pres ».
+
+  <img src="docs/cercle_genres.png" alt="Le cercle des genres : 16 genres sur un cercle, Pop au centre" width="560">
+
+- **Le classifieur de genre** (meme notebook) predit le genre a partir des 63
+  descripteurs. Cinq modeles compares sur 940 morceaux de test (genre exact,
+  exact equilibre entre genres, exact ou voisin sur le cercle) : SVC
+  39 % / 43 % / 74 %, gradient boosting 40 % / 34 % / 80 % (mais un quart de
+  reponses Pop), foret aleatoire 38 % / 40 % / 74 %, kNN cosinus 36 % /
+  35 % / 74 %, regression logistique 33 % / 41 % / 68 %. Le SVC est retenu.
 - **La fusion ajoute des lignes sans reecrire le fichier** : les lignes
   existantes restent identiques octet pour octet, et le schema ne change pas
   (une colonne de plus casserait `_similarity_space`).
@@ -155,6 +183,7 @@ Changements apportes pour l'hebergement et le rendu :
 | Colonne de recommandations dans `.right-panel`, bornee et defilante | `components/layout/home.py`, `assets/style.css` | le bloc etait absolu et sans limite de hauteur : ses dernieres lignes sortaient de l'ecran, et le corps de page (entierement en absolu, donc de hauteur nulle) n'offrait aucun defilement pour les atteindre |
 | Fond sombre translucide sous les recommandations | `assets/style.css` | le texte blanc devenait illisible sur les plans clairs de la video |
 | Lignes de recommandation generees par une boucle, en grille CSS | `components/layout/home.py` | les 10 lignes etaient ecrites a la main en `dbc.Row` de 4 colonnes de largeur egale : la pochette de 50 px occupait un quart de la largeur pendant que les titres longs se repliaient sur trois lignes |
+| Morceau repere par son numero de ligne, et non par son titre ; recherche dans tous les titres sans artiste choisi | `index.py`, `components/engine/functions.py` | 54 titres existent chez plusieurs artistes (*Baby* : Brandy et Justin Bieber) : choisir l'un affichait et recommandait a partir du premier du CSV. Sans artiste, la liste des titres etait vide |
 | Pochette de remplacement quand `Cover` est absent | `components/layout/home.py` | 61 morceaux du catalogue n'ont pas de pochette : le code produisait `<img src="nan">`, donc une icone d'image cassee |
 | Video de fond reencodee : 179 Mo -> 5,7 Mo | `assets/videos/background.mp4` | au-dela de la limite de 100 Mo par fichier de GitHub. 854x480, sans piste audio, avec un flou leger a l'encodage — invisible puisque le CSS applique deja `blur(5px)` |
 

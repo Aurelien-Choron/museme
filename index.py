@@ -95,9 +95,14 @@ def display_dropdown_layout(n):
 
 def display_titles_dropdown (artist_dropdown):
   df_input=functions.load_catalog()
+  # La valeur est le numero de ligne, pas le titre : 54 titres existent chez
+  # plusieurs artistes. Sans artiste choisi, tous les titres sont proposes.
+  if artist_dropdown is None:
+      df_title=df_input.drop_duplicates(subset=['Song', 'Artist']).sort_values(by=['Song'])
+      return [{'label': f'{row.Song} — {row.Artist}', 'value': int(i)} for i, row in df_title.iterrows()]
   df_title=df_input[df_input['Artist']==artist_dropdown]
-  df_title=df_title.sort_values(by=['Song'])
-  return [{'label': i, 'value': i} for i in df_title.Song.unique()]
+  df_title=df_title.drop_duplicates(subset=['Song']).sort_values(by=['Song'])
+  return [{'label': song, 'value': int(i)} for i, song in df_title['Song'].items()]
 
 
 
