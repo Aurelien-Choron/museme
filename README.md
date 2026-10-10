@@ -1,224 +1,295 @@
 # Museme
 
-Application Dash de recommandation musicale par similarite cosinus, sur un
-corpus de 4 724 morceaux (`data/df_recommendation.csv`) : 3 815 collectes en
-2021, 909 ajoutes en octobre 2026 (voir *Alimenter le catalogue*). Chaque
-morceau est decrit par le son de son extrait de 30 s (vecteur CLAP de 512
-dimensions, `data/embeddings_clap.npy`) et par son genre Deezer.
+A Dash app that recommends music by cosine similarity, over a catalogue of
+4,724 tracks: 3,815 collected in 2021 and 909 added in October 2026. Each track
+is described by how it sounds (a 512-dimension embedding of its 30-second
+preview, from the pretrained CLAP audio model) and by its Deezer genre.
 
-Projet d'origine : 2021, Python 3.7 / Dash 1.19.
-Remis en fonctionnement en aout 2026 sur Python 3.12 (voir *Migration* plus bas).
+**[➡ Live demo](https://museme-s4u2.onrender.com)**
+*(Render's free tier sleeps after 15 min of inactivity — the first load takes
+about a minute.)*
 
-## Lancer l'application
+Originally written in 2021 on Python 3.7 / Dash 1.19. Brought back to life in
+August 2026 on Python 3.12 — see [Migration](#migration-2021---2026), which is
+where most of the interesting work is.
 
-Prerequis : Python 3.12 (`py -3.12 --version`).
+![Museme recommending tracks similar to Daft Punk's "Get Lucky"](docs/screenshot.png)
+
+## Where the data comes from
+
+The catalogue is not an off-the-shelf dataset — it was assembled for this project
+in 2021, then extended in 2026.
+
+1. **Scraped from Spotify** — artist, album, title, genre tag, cover art and the
+   30-second preview MP3 of each track. The `Preview` and `Cover` columns still
+   carry those CDN links (`p.scdn.co`, `i.scdn.co`), and they are what the app
+   plays and displays today.
+2. **Genres** — since October 2026, `Main_Genre` and `family_genre` hold the
+   genre of the track's album on Deezer: Deezer's 16 genres, plus `Country`
+   (Deezer returns no genre for country albums, so the 149 tracks tagged
+   country, bluegrass or honky-tonk in 2021 form that genre). 27 tracks have no
+   genre. The 2021 Spotify tags (77 fine-grained "genre seeds", noisy at the
+   artist level) are kept in `data/genres_2021.csv`.
+3. **Audio descriptors, computed from the signal (2021)** — every preview was
+   decoded and reduced with [`librosa`](https://librosa.org) to **63
+   descriptors**, almost all of them derived from the Short-Time Fourier
+   Transform of the waveform:
+
+   | Descriptor | What it measures |
+   |---|---|
+   | `chroma_stft` | energy per pitch class, read straight off the STFT |
+   | `spectral_centroid` | where the centre of mass of the spectrum sits — "brightness" |
+   | `spectral_bandwidth` | how spread out the spectrum is around that centre |
+   | `rolloff` | the frequency below which 85% of the energy falls |
+   | `spectral_contrast` | peak-to-valley difference within each sub-band |
+   | `mfcc1` … `mfcc20` | discrete cosine transform of the log-mel spectrum: timbre |
+   | `tonnetz` | position in tonal space (fifths, thirds) |
+   | `harmony`, `onset`, `polyfeat` | harmonic content, note attacks, spectral slope |
+   | `rms`, `zero_crossing_rate`, `tempo` | loudness, noisiness, beats per minute |
+
+   Every one of them except `tempo` is kept as **both mean and variance** over the
+   preview — 31 quantities x 2, plus tempo, is the 63. They are still in the
+   CSV, but since October 2026 the app no longer uses them (see below). A 2026
+   review also found that the 2021 extraction read the stereo preview as mono
+   at the wrong rate: the analysed signal was four times too long and two
+   octaves too low.
+4. **909 tracks added in October 2026**, from Spotify's public embed pages, with
+   the same descriptors (the 2021 extraction code was recovered and ported, bugs
+   included) — see [Growing the catalogue](#growing-the-catalogue).
+5. **CLAP audio embeddings (2026)** — one 512-dimension vector per track,
+   computed locally for the whole catalogue and stored in
+   `data/embeddings_clap.npy`.
+
+`data/df_66features_clean2.csv` holds the 2021 features for 4,950 tracks (used
+by the summary page); the recommendation catalogue (`data/df_recommendation.csv`)
+has 4,724.
+
+## How tracks are compared
+
+- **Sound first.** Each preview goes through
+  [CLAP](https://github.com/LAION-AI/CLAP) (`laion/larger_clap_general`,
+  Apache 2.0), a model pretrained by LAION on pairs of audio and text
+  descriptions (music, speech, sounds). The preview is cut into 10-second
+  chunks at 48 kHz; each chunk gives 512 numbers; the chunks are averaged into
+  one vector per track. The app standardises each dimension across the
+  catalogue. It only reads the precomputed vectors: Render needs no torch.
+- **Genre helps.** 17 more columns describe the genre: the main genre (weight
+  1), the other Deezer genres of the album (weight 0.5), combined through a
+  circle of genres where neighbours count as half-similar and Pop, close to
+  everything, sits on its own axis. That block is multiplied by a weight of 4.
+  No genre ever pushes another away: at worst it adds nothing.
+- **Cosine similarity** between the chosen track and the whole catalogue; the
+  10 closest tracks are shown.
+
+**Why CLAP.** The 2021 descriptors, three corrected versions of them and CLAP
+were compared over the whole catalogue, then in a blind listening test: 20
+tracks, the 5 nearest neighbours of each version shuffled together (277
+suggestions), each rated close, medium or unrelated, without knowing which
+version made it.
+
+| Audio description | Close | Medium | Unrelated |
+|---|---|---|---|
+| 2021 descriptors | 17% | 28% | 55% |
+| Corrected descriptors (best version) | 31% | 34% | 35% |
+| **CLAP** | **63%** | 26% | **11%** |
+
+CLAP's suggestions scored higher than those of the 2021 descriptors for 17 of
+the 20 tracks.
+
+**Why a genre weight of 4.** About half of the recommendations (54%) stay in
+the track's genre (87% with the previous settings), which leaves room for
+close-sounding tracks from other genres. 66% of tracks find another song by
+the same artist among their recommendations (53% before), although the model
+never sees the artist.
+
+Settings, tests, listening results and how to roll back:
+[`docs/recommandation.md`](docs/recommandation.md) (in French).
+
+## Running it
+
+Requires Python 3.12 (`py -3.12 --version`).
 
 ```powershell
-# depuis le dossier du projet
+# from the project folder
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe index.py
 ```
 
-Puis ouvrir http://127.0.0.1:8050/
+Then open http://127.0.0.1:8050/
 
-> Lancer `index.py`, **pas** `app.py` : `app.py` ne cree que l'objet Dash,
-> c'est `index.py` qui porte le layout et les callbacks.
+> Run `index.py`, **not** `app.py`: `app.py` only creates the Dash object,
+> while `index.py` carries the layout and the callbacks.
 
-### Parcours
+### What the user does
 
-1. Page d'accueil : video de fond + bouton *Get it, let's try*.
-2. Le clic affiche deux listes deroulantes.
-3. Choisir un artiste, puis un de ses titres ; ou, sans artiste, chercher
-   directement dans tous les titres (affiches « Titre — Artiste »).
-4. L'app affiche le morceau (pochette + extrait audio) et 10 recommandations.
+1. Landing page: background video and a *Get it, let's try* button.
+2. Clicking it reveals two dropdowns.
+3. Pick an artist, then one of their tracks — or, with no artist selected,
+   search all titles directly (listed as "Title — Artist").
+4. The app shows that track (cover art and an audio preview) and 10 recommendations.
 
-Autres pages : `/page-1` synthese + graphe Plotly, `/page-2` a propos, `/page-3` ressources.
+Other pages: `/page-1` summary and a Plotly chart, `/page-2` about, `/page-3` resources.
 
 ## Structure
 
 ```
-app.py              objet Dash partage
-index.py            point d'entree : layout, routage, callbacks
+app.py              the shared Dash object
+index.py            entry point: layout, routing, callbacks
 components/
-  engine/functions.py   extraction des donnees + recommandation cosinus
-  layout/               une page par fichier (home, summary, about_us, ressources)
-data/                 catalogue (df_recommendation.csv), vecteurs CLAP, genres Deezer et de 2021
-notebooks/            classifieur de genre, banc d'essai audio (evaluation_audio.ipynb)
-docs/                 cercle des genres, etat des lieux de la recommandation (recommandation.md)
-assets/               CSS, images, favicon, video de fond (servis par Dash)
-audio/                dossiers de travail de l'app d'origine
-legacy/               scripts hors application, conserves pour reference
-pipeline/             alimentation du catalogue (local, jamais deploye)
-render.yaml           blueprint de deploiement Render
-requirements-pipeline.txt   dependances du pipeline (librosa...)
+  engine/functions.py   data extraction and cosine recommendation
+  layout/               one file per page (home, summary, about_us, ressources)
+data/                 catalogue (df_recommendation.csv), CLAP vectors, Deezer and 2021 genres
+notebooks/            genre classifier, audio benchmark (evaluation_audio.ipynb)
+docs/                 screenshot, genre circle, recommendation notes (recommandation.md, in French)
+assets/               CSS, images, favicon, background video (served by Dash)
+audio/                working folders from the original app
+legacy/               scripts outside the app, kept for reference
+pipeline/             catalogue growth (local only, never deployed)
+render.yaml           Render deployment blueprint
+requirements-pipeline.txt   pipeline dependencies (librosa, torch...)
 ```
 
-## Alimenter le catalogue
+## Growing the catalogue
 
-Le dossier `pipeline/` ajoute des morceaux a `data/df_recommendation.csv`,
-puis leurs vecteurs CLAP a `data/embeddings_clap.npy`. Il tourne en local
-uniquement : librosa, numba, torch et transformers ne sont pas deployes.
-Prerequis en plus de l'app : `ffmpeg` dans le PATH, et torch en version CPU
-(voir `requirements-pipeline.txt`).
+`pipeline/` adds tracks to `data/df_recommendation.csv`, then their CLAP
+vectors to `data/embeddings_clap.npy`. It runs locally only: librosa, numba,
+torch and transformers are not deployed. It also needs `ffmpeg` on the PATH,
+and the CPU build of torch (see `requirements-pipeline.txt`).
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-pipeline.txt
-.\.venv\Scripts\python.exe -m pipeline validate  # l'extracteur redonne-t-il les vecteurs de 2021 ?
-.\.venv\Scripts\python.exe -m pipeline collect   # morceaux des playlists de pipeline/playlists.csv
-.\.venv\Scripts\python.exe -m pipeline extract   # 63 descripteurs par morceau
-.\.venv\Scripts\python.exe -m pipeline merge     # ajout au CSV (--dry-run pour verifier)
-.\.venv\Scripts\python.exe -m pipeline embeddings # vecteurs CLAP des nouveaux morceaux -> data/embeddings_clap.npy
-.\.venv\Scripts\python.exe -m pipeline deezer    # genres Deezer, pour notebooks/classifieur_genre.ipynb
+.\.venv\Scripts\python.exe -m pipeline validate    # does the extractor reproduce the 2021 vectors?
+.\.venv\Scripts\python.exe -m pipeline collect     # tracks from the playlists in pipeline/playlists.csv
+.\.venv\Scripts\python.exe -m pipeline extract     # 63 descriptors per track
+.\.venv\Scripts\python.exe -m pipeline merge       # append to the CSV (--dry-run to check)
+.\.venv\Scripts\python.exe -m pipeline embeddings  # CLAP vectors of the new tracks -> data/embeddings_clap.npy
+.\.venv\Scripts\python.exe -m pipeline deezer      # Deezer genres, for notebooks/classifieur_genre.ipynb
+.\.venv\Scripts\python.exe -m pipeline genre-lists # secondary genres -> data/genres_deezer.csv
 ```
 
-Le cache audio, les pages Spotify et les sorties intermediaires vont dans
-`%LOCALAPPDATA%\museme\` (variable `MUSEME_WORK_DIR` pour changer), hors
-OneDrive. `collect`, `extract` et `embeddings` reprennent la ou ils se sont
-arretes. **Apres `merge`, lancer `embeddings`** : l'app refuse de demarrer si
-un morceau n'a pas de vecteur CLAP (environ 2 s par morceau sur CPU).
+The audio cache, the Spotify pages and intermediate outputs go to
+`%LOCALAPPDATA%\museme\` (set `MUSEME_WORK_DIR` to change it), outside
+OneDrive. `collect`, `extract` and `embeddings` resume where they stopped.
+**After `merge`, run `embeddings`**: the app refuses to start if a track has no
+CLAP vector (about 2 s per track on CPU).
 
-Points a connaitre :
+Worth knowing:
 
-- **Les descripteurs reproduisent ceux de 2021, bugs compris.** Le code
-  d'extraction d'origine a ete retrouve (`Downloads\66_features.ipynb`,
-  `_archive\Dash_music\music2\components\engine\functions.py`) et porte dans
-  `pipeline/features_legacy.py`. Ses particularites sont conservees
-  volontairement pour qu'un meme morceau donne le meme vecteur :
-  audio en entiers 16 bits non normalises, MP3 stereo entrelace et analyse
-  comme du mono a 22 050 Hz, `mfcc{k}` = statistiques des k *premiers*
-  coefficients. Les changements de librosa 0.8 -> 0.11 sont neutralises (la
-  CQT de 0.8.1 est reprise dans `pipeline/_cqt08.py`).
-  `validate` le verifie sur 45 morceaux du catalogue : ecart maximal de
-  7e-5 ecart-type, 10 recommandations sur 10 identiques.
-- **Source : pages embed publiques de Spotify** (`open.spotify.com/embed/...`).
-  L'API Web ne donne plus d'extraits depuis novembre 2024 et exige un compte
-  Premium depuis mars 2026. Les pages embed fournissent l'extrait de 30 s sans
-  compte, au meme format que le catalogue, mais ne sont pas une API : elles
-  peuvent changer ou disparaitre sans preavis, et cet usage n'est pas couvert
-  par les conditions developpeur de Spotify.
-- **Les genres sont ceux de Deezer**, pour tout le catalogue : 16 genres
-  Deezer (de `Pop` a `African Music`), plus `Country`. `deezer` note le genre
-  de l'album de chaque morceau sur l'API publique de Deezer (sans compte),
-  dans `%LOCALAPPDATA%\museme\out\deezer_genres.csv`. Le notebook
-  `notebooks/classifieur_genre.ipynb` corrige ces genres, complete les
-  morceaux non trouves (genre de l'artiste, ou correspondance avec le genre
-  de 2021), puis les ecrit dans `Main_Genre` et `family_genre` (meme valeur)
-  avec `pipeline/genres.py`. Deezer ne donne aucun genre aux albums country
-  (`genre_id` -1) : les 149 morceaux des genres country, bluegrass et
-  honky-tonk de 2021 forment le genre `Country`. 27 morceaux ajoutes restent
-  sans genre. Les etiquettes de 2021 (77 « genre seeds » Spotify, bruitees
-  au niveau de l'artiste) sont gardees dans `data/genres_2021.csv`.
-- **La recommandation part de l'audio, le genre l'aide.** L'audio est decrit
-  par le modele pre-entraine CLAP de LAION (`laion/larger_clap_general`,
-  Apache 2.0) : 512 dimensions par morceau, calculees en local par
-  `python -m pipeline embeddings`. L'app ne lit que les vecteurs
-  (`data/embeddings_clap.npy`) : Render n'a pas besoin de torch. CLAP a ete
-  retenu le 2026-10-10 face aux 63 descripteurs de 2021 et a leurs versions
-  corrigees, sur des mesures automatiques puis une ecoute a l'aveugle (63 %
-  de propositions jugees proches, contre 17 % pour les descripteurs de 2021).
-  L'app y ajoute 17 colonnes de genre (`components/engine/functions.py`) : le
-  genre principal, les genres Deezer de l'album en secondaire
-  (`data/genres_deezer.csv`, ecrit par `python -m pipeline genre-lists`), et
-  une similarite entre genres (voisins du cercle ci-dessous, Pop sur son
-  propre axe), avec un poids de 4. Resultat : 54 % des recommandations dans
-  le genre du morceau, et 66 % des morceaux retrouvent un autre titre de leur
-  artiste. Reglages, tests, ecoute et retours en arriere :
-  [`docs/recommandation.md`](docs/recommandation.md).
-- **Le cercle des genres** : deux genres voisins sont proches, et Pop, proche
-  de presque tout, est au centre, voisin de tous. Il sert a juger le
-  classifieur avec indulgence : predire un genre voisin du vrai genre est une
-  erreur pardonnable. L'ordre est un choix musical, verifie sur les albums
-  Deezer qui portent plusieurs genres. Revers de Pop au centre : repondre Pop
-  n'est jamais une erreur lointaine, donc un modele qui se refugie dans Pop
-  gonfle son score « a un voisin pres ».
+- **The descriptors reproduce the 2021 ones, bugs included.** The original
+  extraction code was recovered and ported to `pipeline/features_legacy.py`.
+  Its quirks are kept on purpose so that the same track gives the same vector:
+  audio as unnormalised 16-bit integers, stereo MP3 interleaved and analysed as
+  mono at 22,050 Hz, `mfcc{k}` = statistics of the first k coefficients taken
+  together. The librosa 0.8 -> 0.11 changes are neutralised (the 0.8.1 CQT is
+  kept in `pipeline/_cqt08.py`). `validate` checks this on 45 catalogue
+  tracks: largest deviation 7e-5 standard deviation, 10 out of 10 identical
+  recommendations.
+- **Source: Spotify's public embed pages** (`open.spotify.com/embed/...`). The
+  Web API stopped serving previews in November 2024 and requires a Premium
+  account since March 2026. The embed pages provide the 30-second preview
+  without an account, in the same format as the catalogue, but they are not an
+  API: they can change or disappear without notice, and this use is not
+  covered by Spotify's developer terms.
+- **Genres come from Deezer.** `deezer` looks up the genre of each track's
+  album on Deezer's public API (no account), into
+  `%LOCALAPPDATA%\museme\out\deezer_genres.csv`. The notebook
+  `notebooks/classifieur_genre.ipynb` fixes these genres, fills in the tracks
+  that were not found (the artist's genre, or a mapping from the 2021 genre),
+  then writes them to `Main_Genre` and `family_genre` (same value) through
+  `pipeline/genres.py`.
+- **The genre circle**: two neighbouring genres are close. The image below
+  puts Pop in the centre, as the classifier notebook does to judge predictions
+  leniently (a neighbouring genre is a forgivable mistake). The app gives Pop
+  its own axis instead: in the centre, it cancelled the genre of 16% of the
+  catalogue.
 
-  <img src="docs/cercle_genres.png" alt="Le cercle des genres : 16 genres sur un cercle, Pop au centre" width="560">
+  <img src="docs/cercle_genres.png" alt="The genre circle: 16 genres around a circle, Pop in the centre" width="560">
 
-- **Le classifieur de genre** (meme notebook) predit le genre a partir des 63
-  descripteurs. Cinq modeles compares sur 940 morceaux de test (genre exact,
-  exact equilibre entre genres, exact ou voisin sur le cercle) : SVC
-  39 % / 43 % / 74 %, gradient boosting 40 % / 34 % / 80 % (mais un quart de
-  reponses Pop), foret aleatoire 38 % / 40 % / 74 %, kNN cosinus 36 % /
-  35 % / 74 %, regression logistique 33 % / 41 % / 68 %. Le SVC est retenu.
-- **La fusion ajoute des lignes sans reecrire le fichier** : les lignes
-  existantes restent identiques octet pour octet, et le schema ne change pas.
-  Les 63 descripteurs restent calcules et ecrits dans le CSV (le classifieur
-  de genre et `validate` s'en servent), mais l'app ne les utilise plus.
+- **The genre classifier** (same notebook) predicts the genre from the 63
+  descriptors. Five models compared on 940 test tracks (exact genre, exact
+  balanced across genres, exact or neighbour on the circle): SVC
+  39% / 43% / 74%, gradient boosting 40% / 34% / 80% (but a quarter of its
+  answers are Pop), random forest 38% / 40% / 74%, cosine kNN 36% / 35% / 74%,
+  logistic regression 33% / 41% / 68%. The SVC is kept.
+- **Merging appends rows without rewriting the file**: existing rows stay
+  byte-for-byte identical, and the schema does not change. The 63 descriptors
+  are still computed and written to the CSV (the genre classifier and
+  `validate` use them), but the app no longer does.
 
-## Deploiement (Render, offre gratuite)
+## Deployment (Render, free tier)
 
-L'app tourne sur le plan **free** de Render : 512 Mo de RAM, mise en veille
-apres 15 min sans trafic (~1 min de reveil), 750 h/mois par workspace.
+The app runs on Render's **free** plan: 512 MB of RAM, sleeps after 15 min
+without traffic (~1 min to wake), 750 h/month per workspace.
 
-Le blueprint `render.yaml` decrit tout le service. Sur https://render.com :
-*New > Blueprint*, pointer sur le depot GitHub, deployer.
+`render.yaml` describes the whole service. On https://render.com:
+*New > Blueprint*, point it at the GitHub repo, deploy.
 
-Trois points a connaitre, qui ne sont pas evidents :
+Three things worth knowing, none of them obvious:
 
-- **Render ne lit ni `Procfile` ni `runtime.txt`.** Ces deux fichiers sont un
-  heritage Heroku, conserves mais inertes ici. La version de Python vient de
-  `.python-version` ; sans lui Render prendrait son defaut actuel (3.14), pour
-  lequel les versions epinglees de pandas / numpy n'ont pas de roue.
-- **Un seul worker gunicorn** (`--workers 1 --threads 4`). Chaque worker charge
-  sa propre copie du catalogue : a deux workers on depasse les 512 Mo.
-- L'empreinte mesuree est de ~195 Mo au demarrage et ~206 Mo en regime stable.
+- **Render reads neither `Procfile` nor `runtime.txt`.** Both are Heroku
+  leftovers, kept but inert here. The Python version comes from
+  `.python-version`; without it Render would use its current default (3.14),
+  for which the pinned pandas / numpy versions have no wheel.
+- **A single gunicorn worker** (`--workers 1 --threads 4`). Each worker loads
+  its own copy of the catalogue: two workers exceed the 512 MB limit.
+- Measured footprint before the switch to CLAP: ~195 MB at startup and
+  ~206 MB in steady state. With the CLAP vectors (a 9.7 MB file), a local
+  server measured 233 MB after its first recommendation.
 
-Le plan free n'accepte ni disque persistant ni mise a l'echelle : l'app etant
-entierement en lecture seule sur des CSV versionnes, cela n'a pas d'incidence.
+The free plan allows neither a persistent disk nor scaling: since the app is
+entirely read-only over version-controlled data files, neither matters here.
 
 ## Migration 2021 -> 2026
 
-Le code metier est volontairement reste tel quel. Seul ce qui empechait
-l'execution a ete corrige :
+The business logic was deliberately left untouched. Only what actually
+prevented the app from running was fixed:
 
-| Correction | Fichier | Raison |
+| Fix | File | Why |
 |---|---|---|
-| `dash_html_components` / `dash_core_components` -> `from dash import html, dcc` | les 4 pages de `components/layout/` | paquets absorbes dans `dash` puis supprimes |
-| `DataFrame.append` -> indexation directe | `components/engine/functions.py` | supprime en pandas 2.0 |
-| `app.run_server()` -> `app.run()` | `index.py` | renomme en Dash 3 |
-| Normalisation du retour de `get_loc` | `components/engine/functions.py` | 31 titres du CSV sont en double : `get_loc` renvoyait un masque booleen et faisait planter la recommandation |
-| Suppression des imports `librosa` / `matplotlib` | `functions.py`, `index.py` | importes mais jamais appeles ; imposaient tout le stack audio non compilable en 3.12 |
-| `gunicorn app:server` -> `gunicorn index:server` | `Procfile` | `app.py` n'a pas de layout : le deploiement servait une page vide |
+| `dash_html_components` / `dash_core_components` -> `from dash import html, dcc` | the 4 pages in `components/layout/` | packages absorbed into `dash`, then removed |
+| `DataFrame.append` -> direct indexing | `components/engine/functions.py` | removed in pandas 2.0 |
+| `app.run_server()` -> `app.run()` | `index.py` | renamed in Dash 3 |
+| Normalised the return of `get_loc` | `components/engine/functions.py` | 31 titles in the CSV are duplicates: `get_loc` returned a boolean mask and crashed the recommendation |
+| Dropped the `librosa` / `matplotlib` imports | `functions.py`, `index.py` | imported but never called; they dragged in an audio stack that will not compile on 3.12 |
+| `gunicorn app:server` -> `gunicorn index:server` | `Procfile` | `app.py` has no layout: the deployment was serving a blank page |
 
-## Mise en ligne 2026
+## Going live in 2026
 
-Changements apportes pour l'hebergement et le rendu :
+Changes made for hosting and rendering:
 
-| Changement | Fichier | Raison |
+| Change | File | Why |
 |---|---|---|
-| Titre d'onglet `Museme` + `assets/favicon.ico` | `app.py`, `index.py` | l'onglet affichait `Dash`. Le favicon est genere depuis `assets/images/Logo_Museme.jpg` ; Dash sert automatiquement `assets/favicon.ico` |
-| Colonne de gauche regroupee dans `.left-panel` | `components/layout/home.py`, `assets/style.css` | `.input-box` (top 10 %) et `.track-audio-player-box` (top 40 %) etaient positionnes en absolu chacun de leur cote : leurs hauteurs ne dependant pas de la fenetre, les deux blocs se superposaient des qu'un titre etait selectionne. Ils sont desormais empiles dans un unique conteneur flex |
-| `dbc.Row` retires du bloc de selection | `components/layout/home.py` | les marges negatives de Bootstrap faisaient deborder les listes deroulantes de leur boite |
-| Similarite calculee sur une seule ligne | `components/engine/functions.py` | la matrice complete 3 815 x 3 815 faisait 116 Mo, doublee par la copie DataFrame : pic a 243 Mo par requete. La matrice etant symetrique, le resultat est identique |
-| Catalogue et descripteurs mis en cache (`lru_cache`) | `components/engine/functions.py` | le CSV de 5 Mo etait relu a chaque callback |
-| Chemins de donnees absolus | `components/engine/functions.py` | les chemins relatifs supposaient que le repertoire courant soit la racine du projet |
-| Colonne de recommandations dans `.right-panel`, bornee et defilante | `components/layout/home.py`, `assets/style.css` | le bloc etait absolu et sans limite de hauteur : ses dernieres lignes sortaient de l'ecran, et le corps de page (entierement en absolu, donc de hauteur nulle) n'offrait aucun defilement pour les atteindre |
-| Fond sombre translucide sous les recommandations | `assets/style.css` | le texte blanc devenait illisible sur les plans clairs de la video |
-| Lignes de recommandation generees par une boucle, en grille CSS | `components/layout/home.py` | les 10 lignes etaient ecrites a la main en `dbc.Row` de 4 colonnes de largeur egale : la pochette de 50 px occupait un quart de la largeur pendant que les titres longs se repliaient sur trois lignes |
-| Morceau repere par son numero de ligne, et non par son titre ; recherche dans tous les titres sans artiste choisi | `index.py`, `components/engine/functions.py` | 54 titres existent chez plusieurs artistes (*Baby* : Brandy et Justin Bieber) : choisir l'un affichait et recommandait a partir du premier du CSV. Sans artiste, la liste des titres etait vide |
-| Pochette de remplacement quand `Cover` est absent | `components/layout/home.py` | 61 morceaux du catalogue n'ont pas de pochette : le code produisait `<img src="nan">`, donc une icone d'image cassee |
-| Video de fond reencodee : 179 Mo -> 5,7 Mo | `assets/videos/background.mp4` | au-dela de la limite de 100 Mo par fichier de GitHub. 854x480, sans piste audio, avec un flou leger a l'encodage — invisible puisque le CSS applique deja `blur(5px)` |
+| Tab title `Museme` + `assets/favicon.ico` | `app.py`, `index.py` | the tab read `Dash`. The favicon is generated from `assets/images/Logo_Museme.jpg`; Dash serves `assets/favicon.ico` automatically |
+| Left column grouped into `.left-panel` | `components/layout/home.py`, `assets/style.css` | `.input-box` (top 10%) and `.track-audio-player-box` (top 40%) were each absolutely positioned on their own: their heights do not depend on the window, so the two blocks overlapped as soon as a track was selected. They are now stacked in a single flex container |
+| `dbc.Row` removed from the selection block | `components/layout/home.py` | Bootstrap's negative margins pushed the dropdowns out of their box |
+| Similarity computed on a single row | `components/engine/functions.py` | the full 3,815 x 3,815 matrix was 116 MB, doubled by the DataFrame copy: a 243 MB peak per request. The matrix being symmetric, the result is identical |
+| Catalogue and features cached (`lru_cache`) | `components/engine/functions.py` | the 5 MB CSV was re-read on every callback |
+| Absolute data paths | `components/engine/functions.py` | relative paths assumed the working directory was the project root |
+| Recommendation column moved into `.right-panel`, bounded and scrollable | `components/layout/home.py`, `assets/style.css` | the block was absolutely positioned with no height limit: its last rows fell off the screen, and the page body (entirely absolute, therefore zero-height) offered no scrolling to reach them |
+| Translucent dark backdrop under the recommendations | `assets/style.css` | white text became unreadable over the bright frames of the video |
+| Recommendation rows generated by a loop, in a CSS grid | `components/layout/home.py` | the 10 rows were hand-written as `dbc.Row` with 4 equal columns: the 50 px cover took a quarter of the width while long titles wrapped onto three lines |
+| Tracks identified by their row number, not their title; search across all titles when no artist is selected | `index.py`, `components/engine/functions.py` | 54 titles exist for several artists (*Baby*: Brandy and Justin Bieber): picking one displayed and recommended from the first one in the CSV. With no artist selected, the title list was empty |
+| Placeholder cover when `Cover` is missing | `components/layout/home.py` | 61 tracks in the catalogue have no cover: the code produced `<img src="nan">`, i.e. a broken-image icon |
+| Background video re-encoded: 179 MB -> 5.7 MB | `assets/videos/background.mp4` | above GitHub's 100 MB per-file limit. 854x480, no audio track, with slight blur from the encode — invisible, since the CSS already applies `blur(5px)` |
 
-Effet sur la recommandation, mesure sur 7 titres (dont un titre duplique) :
-resultats strictement identiques a l'ancienne implementation, 243 Mo -> 17 Mo
-de pic memoire, 1,22 s -> 0,02 s une fois le cache chaud.
+Effect on the recommendations, measured over 7 tracks (one of them a duplicate):
+results strictly identical to the old implementation, peak memory 243 MB -> 17 MB,
+and 1.22 s -> 0.02 s once the cache is warm.
 
-Points connus, laisses en l'etat :
+Known issues, deliberately left alone:
 
-- `index.py` recree un second objet `Dash` qui masque celui de `app.py`.
-  Bancal mais fonctionnel.
-- `preprocessing.scale` emet un `UserWarning` sur l'echelle de certaines
-  colonnes du CSV. Sans consequence sur les resultats.
-- Le passage de Bootstrap 4 a 5 peut induire de legers ecarts visuels ;
-  l'essentiel du design vient de `assets/style.css`.
+- `index.py` creates a second `Dash` object that shadows the one in `app.py`.
+  Shaky, but it works.
+- Moving from Bootstrap 4 to 5 may cause slight visual differences; most of the
+  design comes from `assets/style.css` anyway.
 
-## Video de fond
+## Background video
 
-`assets/videos/background.mp4` (5,7 Mo) est la version web, versionnee.
-Le master d'origine (`assets/videos/Mon film 1.mp4`, 179 Mo) est exclu par
-`.gitignore` : il n'est plus utilise par l'app et peut etre supprime ou
-archive ailleurs. Pour le regenerer :
+`assets/videos/background.mp4` (5.7 MB) is the web version, and it is the one in
+Git. The original master (`assets/videos/Mon film 1.mp4`, 179 MB) is excluded by
+`.gitignore`: the app no longer uses it, so it can be deleted or archived
+elsewhere. To regenerate it:
 
 ```powershell
 ffmpeg -i "assets\videos\Mon film 1.mp4" -an `
@@ -226,3 +297,7 @@ ffmpeg -i "assets\videos\Mon film 1.mp4" -an `
   -c:v libx264 -preset slow -crf 33 -pix_fmt yuv420p -g 50 `
   -movflags +faststart "assets\videos\background.mp4"
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
