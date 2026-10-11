@@ -8,8 +8,33 @@ const COVER_URL = "https://i.scdn.co/image/";
 const PREVIEW_URL = "https://p.scdn.co/mp3-preview/";
 // Tailles d'une pochette sur le CDN Spotify : meme identifiant, prefixe different.
 const COVER_SIZES = { 64: "ab67616d00004851", 300: "ab67616d00001e02", 640: "ab67616d0000b273" };
-// Get Lucky, Bad Moon Rising, 4 Minutes, Dona Cila : des genres differents.
-const EXAMPLES = [1251, 4723, 4277, 0];
+// Accueil : 4 morceaux tires au sort a chaque visite, de genres differents.
+// Numeros de ligne du catalogue (pipeline merge ajoute en fin de fichier : ils
+// ne bougent pas). Choisis le 2026-10-11 : connus, et dont les recos ont ete
+// bien notees a l'ecoute (note) ou semblent coherentes (non ecoutees).
+const EXAMPLES = [
+  4277, // 4 Minutes - Madonna (2,0)
+  4723, // Bad Moon Rising - Creedence Clearwater Revival (1,8)
+  3630, // Boom Clap - Charli XCX (1,8)
+  1693, // Next To You - Ciara (1,8)
+  3926, // See You Again - Tyler, The Creator (1,8)
+  1324, // Island Rain - Kenny Chesney (1,8)
+  4238, // One Last Time - Ariana Grande (1,7)
+  4630, // Another One Bites The Dust - Queen
+  4673, // Smells Like Teen Spirit - Nirvana
+  3936, // Blinding Lights - The Weeknd
+  4055, // Don't Start Now - Dua Lipa
+  4227, // Wake Me Up - Avicii
+  4201, // Do I Wanna Know? - Arctic Monkeys
+  4708, // Master of Puppets - Metallica
+  1181, // La femme d'argent - Air
+  500,  // Blue in Green - Miles Davis
+  3975, // Dynamite - BTS
+  2601, // Leggo Beast - Steel Pulse
+  1657, // Couleurs - Fally Ipupa
+  3974, // Too Sweet - Hozier
+];
+const EXAMPLES_SHOWN = 4;
 const SUGGESTIONS = 8;
 
 const $ = (id) => document.getElementById(id);
@@ -154,12 +179,39 @@ function recoRow(t, rank) {
   );
 }
 
+// Titre court pour les etiquettes : sans « (feat. ...) » ni mention de remaster.
+function shortTitle(title) {
+  return title
+    .replace(/ \((feat\.|with) [^)]*\)/i, "")
+    .replace(/ - (\d{4} )?Remaster(ed)?( \d{4})?$/i, "")
+    .replace(/ \((\d{4} )?Remaster(ed)?\)$/i, "");
+}
+
+// Tirage sans remise, un seul morceau par genre.
+function pickExamples() {
+  const pool = EXAMPLES.filter((row) => row < tracks.length);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picked = [];
+  const seen = new Set();
+  for (const row of pool) {
+    const genre = tracks[row][3];
+    if (seen.has(genre)) continue;
+    seen.add(genre);
+    picked.push(row);
+    if (picked.length === EXAMPLES_SHOWN) break;
+  }
+  return picked;
+}
+
 function renderExamples() {
-  els.examples.replaceChildren(...EXAMPLES.filter((row) => row < tracks.length).map((row) => {
+  els.examples.replaceChildren(...pickExamples().map((row) => {
     const t = track(row);
     return h("button", { class: "chip", type: "button", "data-row": row },
       cover(t, "", 64, { loading: "lazy", width: 34, height: 34 }),
-      h("span", {}, h("b", {}, t.title.replace(/ \((feat\.|with) .*\)$/i, "")), ` · ${t.artist}`));
+      h("span", {}, h("b", {}, shortTitle(t.title)), ` · ${t.artist}`));
   }));
 }
 
