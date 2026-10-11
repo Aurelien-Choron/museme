@@ -2,7 +2,9 @@
 
 Ordre normal : validate -> collect -> extract -> merge -> embeddings.
 embeddings : vecteurs CLAP des nouveaux morceaux (data/embeddings_clap.npy),
-sans lesquels l'app ne demarre pas.
+puis donnees du site (web/data/, etape site, lancee d'office).
+site : recommandations de tout le catalogue -> web/data/, a relancer seule
+apres un changement des genres ou des reglages du moteur.
 Puis deezer : genres des morceaux, pour le classifieur (notebooks/),
 et genre-lists : genres secondaires de l'app (data/genres_deezer.csv).
 Banc d'essai (hors catalogue) : features-v2, et embeddings avec --window ou --rows.
@@ -42,6 +44,10 @@ def main():
     p.add_argument("--window", type=float, help="secondes analysees, a une position au hasard")
     p.add_argument("--rows", type=int, help="nombre de morceaux tires au hasard")
 
+    p = sub.add_parser("site", help="catalogue et 10 voisins de chaque morceau -> web/data/")
+    p.add_argument("--no-check", action="store_true",
+                   help="sans le controle contre recommandation_cosine (~95 s)")
+
     args = parser.parse_args()
 
     if args.step == "validate":
@@ -68,6 +74,9 @@ def main():
     elif args.step == "embeddings":
         from . import embeddings
         embeddings.run(window=args.window, n_rows=args.rows)
+    elif args.step == "site":
+        from . import site
+        site.run(check=not args.no_check)
     return 0
 
 

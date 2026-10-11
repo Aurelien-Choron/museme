@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Museme — music that sounds like the music you love</title>
+  <meta name="description" content="Pick a track, hear ten that sound like it. Recommendations by sound, from a CLAP audio embedding of each preview.">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="preload" href="data/catalog.json" as="fetch" crossorigin>
+  <link rel="preload" href="data/neighbors.json" as="fetch" crossorigin>
+  <link rel="preconnect" href="https://i.scdn.co">
+  <link rel="preconnect" href="https://p.scdn.co">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-dice" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1 1 0 0 0 1.53.85l10.2-6.4a1 1 0 0 0 0-1.7L9.53 4.75A1 1 0 0 0 8 5.6z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="2.4" height="14" rx="1"/><path d="M19 6.4v11.2a.9.9 0 0 1-1.4.75l-8.4-5.6a.9.9 0 0 1 0-1.5l8.4-5.6A.9.9 0 0 1 19 6.4z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24" fill="currentColor"><rect x="16.6" y="5" width="2.4" height="14" rx="1"/><path d="M5 6.4v11.2a.9.9 0 0 0 1.4.75l8.4-5.6a.9.9 0 0 0 0-1.5L6.4 5.65A.9.9 0 0 0 5 6.4z"/></symbol>
+    <symbol id="i-similar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M8.2 7.8a6 6 0 0 0 0 8.4M15.8 7.8a6 6 0 0 1 0 8.4M5.2 4.8a10.2 10.2 0 0 0 0 14.4M18.8 4.8a10.2 10.2 0 0 1 0 14.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4z" fill="currentColor"/><path d="m16 9.5 5 5m0-5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </svg>
+
+  <header class="top">
+    <a class="brand" href="./">
+      <picture>
+        <source srcset="img/logo-black.png" media="(prefers-color-scheme: light)">
+        <img src="img/logo-white.png" alt="" width="58" height="32">
+      </picture>
+      <span>museme</span>
+    </a>
+    <nav><a href="about.html">About</a></nav>
+  </header>
+
+  <main id="layout" class="layout is-empty">
+    <h1 class="visually-hidden">Museme</h1>
+
+    <div id="hero" class="hero">
+      <h2>Music that sounds like the music you love.</h2>
+      <p>Pick a track. Museme listens to it and finds the ten closest-sounding ones
+        among <span id="count">4,724</span> — by sound, not by tags.</p>
+    </div>
+
+    <div class="pick">
+      <div class="search" role="search">
+        <div class="search-field">
+          <svg class="icon search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <input id="search" type="search" placeholder="Loading the catalogue…" disabled
+                 role="combobox" aria-label="Search a track, an artist or an album"
+                 aria-autocomplete="list" aria-expanded="false" aria-controls="results"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+          <kbd class="search-key" aria-hidden="true">/</kbd>
+        </div>
+        <button id="surprise" class="icon-btn surprise" type="button" disabled
+                title="Surprise me" aria-label="Surprise me: start from a random track">
+          <svg class="icon" aria-hidden="true"><use href="#i-dice"/></svg>
+        </button>
+        <ul id="results" class="results" role="listbox" aria-label="Suggestions" hidden></ul>
+      </div>
+
+      <article id="seed" class="seed" aria-label="Your pick" hidden></article>
+    </div>
+
+    <div id="try" class="try">
+      <p class="label">Try</p>
+      <div id="examples" class="chips"></div>
+    </div>
+
+    <section id="recos" class="recos" aria-labelledby="recos-title" hidden>
+      <h2 id="recos-title" class="label" aria-live="polite">Sounds like <span id="recos-seed"></span></h2>
+      <ol id="reco-list" class="reco-list"></ol>
+    </section>
+  </main>
+
+  <footer id="player" class="player" aria-label="Player" hidden>
+    <div class="player-line" aria-hidden="true"><span id="p-line"></span></div>
+    <div class="player-track">
+      <span id="p-cover" class="player-cover"></span>
+      <span class="player-text">
+        <span id="p-title" class="player-title"></span>
+        <span id="p-artist" class="player-artist"></span>
+      </span>
+    </div>
+    <div class="player-center">
+      <div class="player-controls">
+        <button id="p-prev" class="icon-btn" type="button" aria-label="Previous"><svg class="icon" aria-hidden="true"><use href="#i-prev"/></svg></button>
+        <button id="p-play" class="play-btn" type="button" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button id="p-next" class="icon-btn" type="button" aria-label="Next"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
+      </div>
+      <div class="player-progress">
+        <span id="p-time" class="time">0:00</span>
+        <input id="p-seek" class="range" type="range" min="0" max="30" step="0.1" value="0" aria-label="Position">
+        <span id="p-duration" class="time">0:30</span>
+      </div>
+    </div>
+    <div class="player-extra">
+      <button id="p-similar" class="icon-btn" type="button" title="Find similar" aria-label="Find tracks similar to this one"><svg class="icon" aria-hidden="true"><use href="#i-similar"/></svg></button>
+      <button id="p-mute" class="icon-btn volume-btn" type="button" aria-label="Mute"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg></button>
+      <input id="p-volume" class="range volume" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+    </div>
+    <p id="toast" class="toast" role="status"></p>
+  </footer>
+</body>
+</html>

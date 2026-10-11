@@ -1,9 +1,12 @@
 # Recommandation : etat des lieux des reglages et des tests
 
-Etat au 2026-10-10. Depuis ce jour, l'audio est decrit par le modele CLAP
-(V3 de la partie 7) et le genre pese 4. Points de retour : `dc9439f` (63
-descripteurs de 2021, genre sur le cercle, poids 3) et `fb73ead` (genre en
-indicatrices, morceau repere par son titre, meilleur voisin saute).
+Etat au 2026-10-11. Depuis le 2026-10-10, l'audio est decrit par le modele
+CLAP (V3 de la partie 7) et le genre pese 4. Depuis le 2026-10-11, l'app
+Dash est remplacee par un site statique (`web/`) : les recommandations sont
+calculees d'avance par le meme moteur, sans rien changer au calcul. Points
+de retour : `dc9439f` (63 descripteurs de 2021, genre sur le cercle, poids
+3), `fb73ead` (genre en indicatrices, morceau repere par son titre, meilleur
+voisin saute) et le tag `dash-final` (derniere version de l'app Dash).
 
 **Objectif** : recommander par l'audio. Les autres informations, dont le
 genre, sont la pour aider.
@@ -13,46 +16,50 @@ change : le nom de la fonction ou de la constante est toujours donne a cote.
 
 ## 1. Le calcul, etape par etape
 
-1. [`load_catalog`](../components/engine/functions.py#L45) lit
+1. [`load_catalog`](../components/engine/functions.py#L44) lit
    `data/df_recommendation.csv`, une seule fois par processus.
-2. [`_similarity_space`](../components/engine/functions.py#L88) construit
+2. [`_similarity_space`](../components/engine/functions.py#L87) construit
    l'espace de similarite : les 512 dimensions des vecteurs CLAP
    (`data/embeddings_clap.npy`, une ligne par ligne du CSV, ecrit par
    `python -m pipeline embeddings`) centrees-reduites, puis 17 colonnes de
-   genre ([lignes 105-107](../components/engine/functions.py#L105-L107)),
-   calculees par [`_genre_weights`](../components/engine/functions.py#L68)
-   et [`_genre_similarity_root`](../components/engine/functions.py#L53).
+   genre ([lignes 104-106](../components/engine/functions.py#L104-L106)),
+   calculees par [`_genre_weights`](../components/engine/functions.py#L67)
+   et [`_genre_similarity_root`](../components/engine/functions.py#L52).
    Calcule une seule fois. Refuse de demarrer si le nombre de vecteurs ne
    correspond pas au CSV. Les 63 descripteurs du CSV ne servent plus.
-3. [`recommandation_cosine`](../components/engine/functions.py#L142) calcule
+3. [`recommandation_cosine`](../components/engine/functions.py#L109) calcule
    le cosinus entre le morceau et tout le catalogue, trie, retire le morceau
-   lui-meme ([ligne 154](../components/engine/functions.py#L154)) et garde les
-   11 premiers ([ligne 157](../components/engine/functions.py#L157)).
-4. [`recommendation_box_layout`](../components/layout/home.py#L156) en affiche
-   10 (`head(10)`, [ligne 159](../components/layout/home.py#L159)).
+   lui-meme ([ligne 121](../components/engine/functions.py#L121)) et garde les
+   11 premiers ([ligne 124](../components/engine/functions.py#L124)).
+4. [`python -m pipeline site`](../pipeline/site.py) calcule d'un coup les
+   10 premiers de chaque morceau ([`neighbors`](../pipeline/site.py#L35)),
+   verifie pour les 4 724 morceaux qu'ils sont ceux de
+   `recommandation_cosine`, puis ecrit `web/data/neighbors.json` et
+   `web/data/catalog.json`. Le site les affiche tels quels
+   ([`recommend`](../web/app.js), seule fonction a remplacer pour
+   recommander autrement).
 
-Le morceau est designe par son numero de ligne dans le CSV : c'est la valeur
-de la liste des titres, construite par
-[`display_titles_dropdown`](../index.py#L96).
+Le morceau est designe par son numero de ligne dans le CSV, qui est aussi
+sa position dans `catalog.json` et `neighbors.json`.
 
-**Apres une modification** : `load_catalog` et `_similarity_space` sont en
-cache. Avec `index.py` lance en mode debug, enregistrer un `.py` recharge
-l'app ; modifier un CSV ou `embeddings_clap.npy` ne la recharge pas, il
-faut la relancer.
+**Apres une modification** du moteur, des genres ou des vecteurs : relancer
+`python -m pipeline site` (environ 2 min, dont 95 s de controle ;
+`--no-check` pour s'en passer), puis recharger la page. `embeddings` le fait
+d'office apres un ajout au catalogue.
 
 ## 2. Reglages actuels
 
 | Reglage | Valeur | Ou | Effet |
 |---|---|---|---|
-| Audio | CLAP (`laion/larger_clap_general`), 512 dimensions centrees-reduites | [`CLAP_NPY`](../components/engine/functions.py#L21) | jusqu'au 2026-10-09 : les 63 descripteurs de 2021 |
-| Ordre du cercle | 16 genres | [`GENRE_CIRCLE`](../components/engine/functions.py#L26) | voisins du cercle rapproches |
-| Pop | son propre axe | [`GENRES`](../components/engine/functions.py#L29) | Pop attire Pop, reste un peu proche de tous |
-| Similarite entre voisins | 0,5 | [`NEIGHBOR_SIMILARITY`](../components/engine/functions.py#L34) | 0 = voisins traites comme des genres eloignes |
-| Similarite Pop / autres | 0,3 | [`POP_SIMILARITY`](../components/engine/functions.py#L35) | |
-| Genres secondaires | `data/genres_deezer.csv`, poids 0,5 | [`SECONDARY_GENRE_SHARE`](../components/engine/functions.py#L37) | 0 = un seul genre par morceau |
-| Poids du genre | 4 | [`GENRE_WEIGHT`](../components/engine/functions.py#L41) | 0 = audio seul |
-| Recos renvoyees / affichees | 11 / 10, meilleur voisin compris | [`[0:11]`](../components/engine/functions.py#L157), [`head(10)`](../components/layout/home.py#L159) | |
-| Titres sans artiste choisi | tous, « Titre — Artiste » | [`index.py`](../index.py#L100) | |
+| Audio | CLAP (`laion/larger_clap_general`), 512 dimensions centrees-reduites | [`CLAP_NPY`](../components/engine/functions.py#L20) | jusqu'au 2026-10-09 : les 63 descripteurs de 2021 |
+| Ordre du cercle | 16 genres | [`GENRE_CIRCLE`](../components/engine/functions.py#L25) | voisins du cercle rapproches |
+| Pop | son propre axe | [`GENRES`](../components/engine/functions.py#L28) | Pop attire Pop, reste un peu proche de tous |
+| Similarite entre voisins | 0,5 | [`NEIGHBOR_SIMILARITY`](../components/engine/functions.py#L33) | 0 = voisins traites comme des genres eloignes |
+| Similarite Pop / autres | 0,3 | [`POP_SIMILARITY`](../components/engine/functions.py#L34) | |
+| Genres secondaires | `data/genres_deezer.csv`, poids 0,5 | [`SECONDARY_GENRE_SHARE`](../components/engine/functions.py#L36) | 0 = un seul genre par morceau |
+| Poids du genre | 4 | [`GENRE_WEIGHT`](../components/engine/functions.py#L40) | 0 = audio seul |
+| Recos renvoyees / affichees | 11 / 10, meilleur voisin compris | [`[0:11]`](../components/engine/functions.py#L124), [`N_NEIGHBORS`](../pipeline/site.py#L30) = 10 | |
+| Recherche | une barre : titre, artiste ou album, sans accents, dans n'importe quel ordre | [`web/search.js`](../web/search.js) | |
 
 Resultat sur les 4 724 morceaux, 11 recommandations chacun : 53,8 % des
 recommandations dans le genre du morceau, 13,6 % dans un genre eloigne sur le
@@ -69,7 +76,7 @@ Music, Brazilian Music, Jazz, Classical, Folk, Country, Alternative, Rock,
 Metal, Electro, Dance (le dernier touche le premier). Pop n'est plus au
 centre du cercle dans l'app : il a son propre axe (voir H10).
 
-**Les genres d'un morceau** ([`_genre_weights`](../components/engine/functions.py#L68)) :
+**Les genres d'un morceau** ([`_genre_weights`](../components/engine/functions.py#L67)) :
 `Main_Genre` pese 1, chaque genre secondaire 0,5, puis le vecteur est ramene a
 une norme de 1. Les genres secondaires sont les genres Deezer de l'album,
 ramenes aux 17 genres par [`DEEZER_PARENT`](../pipeline/genres.py#L33)
@@ -79,7 +86,7 @@ ecrits dans `data/genres_deezer.csv` par
 ont plusieurs genres. Un morceau sans genre n'a que des zeros : le genre ne
 joue pas pour lui.
 
-**La similarite entre genres** ([`_genre_similarity_root`](../components/engine/functions.py#L53)) :
+**La similarite entre genres** ([`_genre_similarity_root`](../components/engine/functions.py#L52)) :
 une matrice S de 17 x 17 vaut 1 pour un meme genre, 0,5 entre voisins du
 cercle, 0,3 entre Pop et chacun des autres, 0 sinon. Chaque morceau recoit
 `GENRE_WEIGHT × m @ L`, ou m est son vecteur de genres et L la racine de S
@@ -107,7 +114,7 @@ approchee sans avertissement. Il faut `NEIGHBOR_SIMILARITY <= 0,5` et
 avec des voisins a 0,5.
 
 **Le cercle est defini a trois endroits**, a garder synchronises :
-[`GENRE_CIRCLE`](../components/engine/functions.py#L26), la cellule `CENTRE`
+[`GENRE_CIRCLE`](../components/engine/functions.py#L25), la cellule `CENTRE`
 / `CERCLE` du notebook [`classifieur_genre.ipynb`](../notebooks/classifieur_genre.ipynb)
 (qui met Pop au centre, pour juger le classifieur), et l'image
 `cercle_genres.png` exportee par ce notebook.
@@ -186,7 +193,7 @@ poids 2).
 
 ### Changer le poids du genre
 
-[`GENRE_WEIGHT`](../components/engine/functions.py#L41). Reperes avec CLAP
+[`GENRE_WEIGHT`](../components/engine/functions.py#L40). Reperes avec CLAP
 (recommandations dans le genre du morceau / dans un genre eloigne, 11 par
 morceau) : `0` donne exactement l'audio seul (colonnes nulles), 45,9 % /
 17,7 % ; `4` (actuel) 53,8 % / 13,6 % ; `8` 73,7 % / 5,9 % ; `12` 89,6 % /
@@ -194,14 +201,14 @@ morceau) : `0` donne exactement l'audio seul (colonnes nulles), 45,9 % /
 
 ### Un seul genre par morceau
 
-[`SECONDARY_GENRE_SHARE`](../components/engine/functions.py#L37) a `0`.
+[`SECONDARY_GENRE_SHARE`](../components/engine/functions.py#L36) a `0`.
 
 ### Changer le voisinage
 
-[`NEIGHBOR_SIMILARITY`](../components/engine/functions.py#L34) et
-[`POP_SIMILARITY`](../components/engine/functions.py#L35), dans les limites
+[`NEIGHBOR_SIMILARITY`](../components/engine/functions.py#L33) et
+[`POP_SIMILARITY`](../components/engine/functions.py#L34), dans les limites
 de la partie 3. Pour l'ordre du cercle,
-[`GENRE_CIRCLE`](../components/engine/functions.py#L26) : un genre retire
+[`GENRE_CIRCLE`](../components/engine/functions.py#L25) : un genre retire
 n'a plus de voisin.
 
 ### Regenerer les genres secondaires
@@ -242,14 +249,17 @@ le corps par :
 
 ### Sauter de nouveau le meilleur voisin
 
-Dans [`recommandation_cosine`](../components/engine/functions.py#L157),
+Dans [`recommandation_cosine`](../components/engine/functions.py#L124),
 remplacer `[0:11]` par `[1:12]`.
 
-### Revenir a la recherche par artiste seul
+### Revenir a l'app Dash
 
-Dans [`display_titles_dropdown`](../index.py#L100), supprimer le bloc
-`if artist_dropdown is None:`. Garder le numero de ligne comme valeur : le
-titre seul confond les 54 titres partages entre artistes.
+```powershell
+git checkout dash-final -- index.py app.py components/layout assets Procfile runtime.txt requirements.txt requirements-deploy.txt render.yaml
+```
+
+L'app Dash recalcule chaque recommandation a la demande avec le meme moteur ;
+`render.yaml` redevient un service Python (gunicorn).
 
 ### Revenir entierement a `fb73ead`
 
@@ -260,31 +270,42 @@ git checkout fb73ead -- components/engine/functions.py index.py pipeline/merge.p
 
 Ces trois fichiers vont ensemble : `fb73ead` designe les morceaux par leur
 titre, la version actuelle par leur numero de ligne. La seconde commande
-ecrase les modifications non commitees de ces fichiers.
+ecrase les modifications non commitees de ces fichiers. `index.py` etant
+l'app Dash, revenir d'abord a l'app Dash (ci-dessus).
 
 ## 6. Journal des modifications
 
-Les liens de ce journal pointent vers le code actuel.
+Les liens de ce journal pointent vers le code actuel ; l'app Dash
+(`index.py`, `components/layout/`) a ete retiree le 2026-10-11 et se
+retrouve au tag `dash-final`.
 
 **2026-10-09**
 
 | Modification | Ou | Raison |
 |---|---|---|
-| Genre en indicatrices retire, essai de l'audio seul | [`_similarity_space`](../components/engine/functions.py#L88) | ne pas empecher de recommander un autre genre |
+| Genre en indicatrices retire, essai de l'audio seul | [`_similarity_space`](../components/engine/functions.py#L87) | ne pas empecher de recommander un autre genre |
 | Cercle, Pop au centre, poids 2 | idem | H7 ; abandonne le soir meme (H10) |
-| Pop sur son axe, voisins 0,5, Pop / autres 0,3, poids 3 | [`_genre_similarity_root`](../components/engine/functions.py#L53) | H10 |
-| Genres secondaires Deezer, poids 0,5 | [`_genre_weights`](../components/engine/functions.py#L68), [`write_genre_lists`](../pipeline/genres.py#L110), `data/genres_deezer.csv` | H12 |
-| Meilleur voisin affiche | [`recommandation_cosine`](../components/engine/functions.py#L157) | H9 |
-| Sans artiste choisi, la liste propose tous les titres | [`display_titles_dropdown`](../index.py#L96) | la liste etait vide : « dona » ne trouvait rien |
-| Morceau designe par son numero de ligne | [`input_data_extraction`](../components/engine/functions.py#L110), [`recommandation_cosine`](../components/engine/functions.py#L142), [`index.py`](../index.py#L96) | 54 titres existent chez plusieurs artistes : choisir le *Baby* de Justin Bieber affichait celui de Brandy |
+| Pop sur son axe, voisins 0,5, Pop / autres 0,3, poids 3 | [`_genre_similarity_root`](../components/engine/functions.py#L52) | H10 |
+| Genres secondaires Deezer, poids 0,5 | [`_genre_weights`](../components/engine/functions.py#L67), [`write_genre_lists`](../pipeline/genres.py#L110), `data/genres_deezer.csv` | H12 |
+| Meilleur voisin affiche | [`recommandation_cosine`](../components/engine/functions.py#L124) | H9 |
+| Sans artiste choisi, la liste propose tous les titres | `display_titles_dropdown` (`index.py`, app Dash) | la liste etait vide : « dona » ne trouvait rien |
+| Morceau designe par son numero de ligne | `input_data_extraction` (app Dash, retiree le 2026-10-11), [`recommandation_cosine`](../components/engine/functions.py#L109), `index.py` (app Dash) | 54 titres existent chez plusieurs artistes : choisir le *Baby* de Justin Bieber affichait celui de Brandy |
 
 **2026-10-10**
 
 | Modification | Ou | Raison |
 |---|---|---|
-| Audio decrit par les vecteurs CLAP (512 dimensions) au lieu des 63 descripteurs | [`_similarity_space`](../components/engine/functions.py#L88), [`CLAP_NPY`](../components/engine/functions.py#L21), `data/embeddings_clap.npy` | banc d'essai et ecoute a l'aveugle (partie 7) |
-| Poids du genre : 3 → 4 | [`GENRE_WEIGHT`](../components/engine/functions.py#L41) | le poids 3 etait cale face a 63 colonnes ; recommander des morceaux proches, meme d'un autre genre |
-| `embeddings` sur tout le catalogue ecrit `data/embeddings_clap.npy` et verifie l'app ; `merge` renvoie vers cette etape | [`publish`](../pipeline/embeddings.py#L88), [`merge.py`](../pipeline/merge.py#L34) | l'app refuse de demarrer s'il manque un vecteur |
+| Audio decrit par les vecteurs CLAP (512 dimensions) au lieu des 63 descripteurs | [`_similarity_space`](../components/engine/functions.py#L87), [`CLAP_NPY`](../components/engine/functions.py#L20), `data/embeddings_clap.npy` | banc d'essai et ecoute a l'aveugle (partie 7) |
+| Poids du genre : 3 → 4 | [`GENRE_WEIGHT`](../components/engine/functions.py#L40) | le poids 3 etait cale face a 63 colonnes ; recommander des morceaux proches, meme d'un autre genre |
+| `embeddings` sur tout le catalogue ecrit `data/embeddings_clap.npy` et verifie l'app ; `merge` renvoie vers cette etape | [`publish`](../pipeline/embeddings.py#L90), [`merge.py`](../pipeline/merge.py#L34) | l'app refuse de demarrer s'il manque un vecteur |
+
+**2026-10-11**
+
+| Modification | Ou | Raison |
+|---|---|---|
+| Recommandations precalculees pour tout le catalogue, controlees morceau par morceau contre `recommandation_cosine` (4 724 / 4 724 identiques) | [`pipeline/site.py`](../pipeline/site.py), `web/data/` | la demo Render gratuite mettait 63 s a se reveiller et ~1,2 s par recommandation |
+| L'app Dash devient un site statique, recherche unique dans le navigateur | [`web/`](../web/) | meme algorithme, aucun calcul en ligne |
+| `embeddings` met a jour les donnees du site au lieu de verifier l'app | [`publish`](../pipeline/embeddings.py#L90) | le site lit `web/data/`, pas les vecteurs |
 
 [`pipeline/validate_legacy.py`](../pipeline/validate_legacy.py#L24) garde
 l'ancien espace (indicatrices) : la validation de l'extracteur n'a pas ete
@@ -475,9 +496,66 @@ foreach ($w in 5, 10, 15, 20, 25) {                                  # courbe de
 ```
 
 `embeddings` sans `--window` ni `--rows` reecrit aussi
-`data/embeddings_clap.npy`, lu par l'app.
+`data/embeddings_clap.npy`, lu par le moteur, puis les donnees du site.
+
+### Ecoute ciblee Electro / Dance / Pop (2026-10-11)
+
+**Pourquoi** : les recommandations de *Get Lucky* (Daft Punk) jugees
+mauvaises : *那一端* (RubberBand), *Soy Tu Superhéroe* (Melendi), une charanga
+cubaine, *Perdi Você* (Raça Negra). Pas d'erreur : le vecteur CLAP recalcule
+depuis l'extrait est identique a celui du catalogue. En zero-shot, CLAP entend
+*Get Lucky* comme du disco, puis french house et funk, mais il entend aussi ces
+voisins comme du disco. A l'ecoute, ils partagent une ligne de basse et des
+cocottes de guitare ; d'autres, des motifs de voix. Les autres titres de Daft
+Punk arrivent au 63e rang ou au-dela.
+
+**Effet de CLAP sur Electro / Dance** (10 recommandations) : depuis un depart
+Electro ou Dance, 93 % des voisins etaient Electro ou Dance avec les 63
+descripteurs (poids 3), 79 % avec CLAP x4, 90 % avec CLAP x8 ; le meme
+artiste revient plus souvent avec CLAP (Electro : 31 % → 41 %).
+
+**Ecoute** : trois reglages, top 10 melanges a l'aveugle : genre x4 (actuel),
+x8 partout, x4 avec Electro et Dance a x8. 15 departs tires au sort (6
+Electro, 5 Dance, 3 Pop, plus *Get Lucky*) ; **7 notes en entier** (3 Electro,
+1 Dance, 3 Pop), 83 propositions. Page, cle et script d'analyse :
+`%LOCALAPPDATA%\museme\out\ecoute_electro*` et `analyse_ecoute_electro.py`.
+
+| Note moyenne du top 10 (0-2) | x4 | x8 | x4, Electro/Dance x8 |
+|---|---|---|---|
+| Tous les departs (7) | 1,23 | 1,27 | 1,26 |
+| Electro (3) | 0,90 | 0,93 | 0,93 |
+| Dance (1) | 0,9 | 1,0 | 1,0 |
+| Pop (3) | 1,67 | 1,70 | 1,67 |
+
+- Ecart avec x4, par depart : x8 +0,04 [−0,03 ; +0,11], Electro/Dance x8
+  +0,03 [−0,03 ; +0,07] : pas de difference. x8 ne change qu'environ 2
+  recommandations sur 10, et pas celles qui posent probleme.
+- L'ecart est entre les genres : Electro et Dance 0,9, Pop 1,7, quel que soit
+  le reglage. Les propositions du meme genre que le depart obtiennent 1,46,
+  les autres 0,89.
+- *Get Lucky* : LCD Soundsystem et Crazy P notes proches (meme groove et meme
+  univers) ; la charanga, RubberBand et Raça Negra sans rapport (meme groove,
+  autre univers).
+
+**Decision (2026-10-11)** : garder x4. Le poids du genre ne corrige pas ces
+cas : les 17 genres sont trop larges (« Electro » regroupe techno, house,
+trip-hop, french touch). Les 8 departs non notes sont tous Electro ou Dance :
+l'ecoute peut etre terminee plus tard (les reponses restent dans le
+navigateur).
 
 ## 8. Pistes ouvertes
+
+- **Signal de style** (2026-10-11) : CLAP rapproche par le jeu (basse,
+  guitare, phrase de voix), pas par la scene, la langue ni la production.
+  Piste : un modele entraine sur des styles (Discogs-EffNet, 400 styles
+  Discogs ; compatibilite Windows a verifier ; MERT en repli), en complement
+  de CLAP, puis ecoute a l'aveugle.
+- **Reglages par l'utilisateur** (lot 2) : rester dans le style ou suivre le
+  groove, meme tempo ou non. Faisable sur le site statique : tables de
+  voisins par position du curseur, ou vecteurs en int8 et cosinus pondere
+  recalcule dans le navigateur. Le `tempo` de 2021 est inutilisable ; celui
+  de `features_v2.csv` (audio bien lu) reste a fiabiliser (erreurs du
+  simple au double).
 
 - **Revue des genres** : [`revue_genres.csv`](revue_genres.csv) liste
   997 morceaux a verifier (970 d'artistes classes dans plusieurs genres, 27

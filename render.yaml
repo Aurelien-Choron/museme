@@ -1,17 +1,19 @@
 # Blueprint Render - https://render.com/docs/blueprint-spec
-# Deploiement gratuit de Museme. Render ne lit pas le Procfile (heritage
-# Heroku) ni runtime.txt : la version de Python vient de .python-version.
+# Museme est un site statique depuis le 2026-10-11 : Render sert les fichiers
+# de web/ depuis son CDN, sans serveur Python, sans mise en veille.
+# Les donnees (web/data/) sont ecrites en local par python -m pipeline site
+# et commitees, comme data/embeddings_clap.npy : rien a construire ici.
+# Le runtime d'un service ne change pas apres sa creation : ce site est un
+# nouveau service, distinct de l'ancien service Python « museme ».
 services:
-  - name: museme
+  - name: museme-site
     type: web
-    runtime: python
-    plan: free
-    region: frankfurt
-    buildCommand: pip install -r requirements-deploy.txt
-    startCommand: >-
-      gunicorn index:server
-      --bind 0.0.0.0:$PORT
-      --workers 1
-      --threads 4
-      --timeout 120
-      --preload
+    runtime: static
+    buildCommand: echo "web/ est publie tel quel"
+    staticPublishPath: ./web
+    headers:
+      # Revalidation a chaque visite (reponse 304 si rien n'a change) : un
+      # nouvel export ou une nouvelle version du site est vu tout de suite.
+      - path: /*
+        name: Cache-Control
+        value: no-cache

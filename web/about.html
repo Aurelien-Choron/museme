@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>About — Museme</title>
+  <meta name="description" content="How Museme recommends music by sound: CLAP audio embeddings, Deezer genres, cosine similarity.">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="./">
+      <picture>
+        <source srcset="img/logo-black.png" media="(prefers-color-scheme: light)">
+        <img src="img/logo-white.png" alt="" width="58" height="32">
+      </picture>
+      <span>museme</span>
+    </a>
+    <nav><a href="./">Back to the app</a></nav>
+  </header>
+
+  <main class="prose">
+    <h1>Music, by how it sounds.</h1>
+    <p class="lead">Pick a track and Museme returns the ten tracks of its catalogue whose audio
+      is closest — whatever the artist's fame or the tags attached to them.</p>
+
+    <h2>How it works</h2>
+    <ol>
+      <li><strong>Listening.</strong> Each track's 30-second preview goes through
+        <a href="https://github.com/LAION-AI/CLAP">CLAP</a> (LAION's <code>larger_clap_general</code>),
+        a model trained on pairs of sounds and text descriptions. It turns the preview into
+        512 numbers that describe how it sounds.</li>
+      <li><strong>Genre helps.</strong> The genre of the track's album on Deezer adds 17 numbers.
+        Genres sit on a circle where neighbours count as half-similar, and Pop, close to
+        everything, has its own axis. The genre block gets a weight of 4 against the 512
+        sound numbers: about half of the recommendations stay in the track's genre, the rest
+        are close-sounding tracks from elsewhere.</li>
+      <li><strong>Comparing.</strong> Cosine similarity between the picked track and the whole
+        catalogue; the ten closest are shown. It is computed once for every track, which is
+        why the answer is instant.</li>
+    </ol>
+
+    <h2>Does it work?</h2>
+    <p>Before choosing CLAP, the 2021 audio descriptors, corrected versions of them and CLAP
+      were compared in a blind listening test: 20 tracks, 277 suggestions shuffled together,
+      each rated without knowing which method made it.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Audio description</th><th>Close</th><th>Medium</th><th>Unrelated</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2021 descriptors (librosa)</td><td>17%</td><td>28%</td><td>55%</td></tr>
+          <tr><td>Corrected descriptors</td><td>31%</td><td>34%</td><td>35%</td></tr>
+          <tr class="best"><td>CLAP</td><td>63%</td><td>26%</td><td>11%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Two thirds of the tracks also find another song by the same artist among their
+      recommendations, although the model never sees the artist.</p>
+
+    <h2>The catalogue</h2>
+    <p><strong>4,724 tracks</strong>: 3,815 collected from Spotify in 2021, 909 added in 2026.
+      Previews and covers are streamed from Spotify; genres come from Deezer's public API
+      (Deezer's 16 genres, plus Country).</p>
+
+    <h2>History</h2>
+    <p>Museme started in 2021 as a team project at the Wild Code School, as a Dash app
+      comparing hand-crafted audio descriptors. It was brought back to life in 2026: a larger
+      catalogue, recommendations by CLAP, and this static site.</p>
+    <ul class="team">
+      <li><b><a href="https://www.linkedin.com/in/aur%C3%A9lien-choron-390503201/">Aurélien</a></b><span>Music &amp; Data Scientist</span></li>
+      <li><b><a href="https://www.linkedin.com/in/guillaume-decroix-76724ab1/">Guillaume</a></b><span>Data Scientist</span></li>
+      <li><b><a href="https://www.linkedin.com/in/jos%C3%A9phine-foy-39aa0b182/">Joséphine</a></b><span>Data Analyst</span></li>
+      <li><b><a href="https://www.linkedin.com/in/victorandouard/">Victor</a></b><span>Data Engineer</span></li>
+      <li><b>Karim</b><span>Financial Analyst</span></li>
+    </ul>
+
+    <h2>Credits</h2>
+    <ul>
+      <li><a href="https://github.com/LAION-AI/CLAP">CLAP</a> by LAION (Apache 2.0), through Hugging Face <code>transformers</code>.</li>
+      <li><a href="https://librosa.org">librosa</a> for the 2021 audio descriptors.</li>
+      <li><a href="https://developers.deezer.com/api">Deezer API</a> for the genres.</li>
+      <li>Previews and covers: Spotify. All music belongs to its rights holders.</li>
+      <li>2021 references: the <a href="https://www.kaggle.com/datasets/andradaolteanu/gtzan-dataset-music-genre-classification">GTZAN dataset</a>,
+        <a href="https://musicinformationretrieval.com/">musicinformationretrieval.com</a> (Steve Tjoa),
+        Valerio Velardo's <a href="https://www.youtube.com/channel/UCZPFjMe1uRSirmSpznqvJfQ">The Sound of AI</a>.</li>
+    </ul>
+
+    <footer>
+      Code, data and method on <a href="https://github.com/Aurelien-Choron/museme">GitHub</a> · MIT license
+    </footer>
+  </main>
+</body>
+</html>

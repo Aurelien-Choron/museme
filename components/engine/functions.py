@@ -6,12 +6,11 @@ import pandas as pd
 from sklearn import preprocessing
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Chemins absolus : gunicorn peut demarrer depuis un repertoire courant
-# different de la racine du projet.
+# Chemins absolus : le moteur est appele par le pipeline et les notebooks,
+# depuis des repertoires courants differents.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 RECOMMENDATION_CSV = os.path.join(DATA_DIR, "df_recommendation.csv")
-FEATURES_CSV = os.path.join(DATA_DIR, "df_66features_clean2.csv")
 # Genres secondaires (genres Deezer de l'album), ecrits par
 # python -m pipeline genre-lists.
 GENRE_LISTS_CSV = os.path.join(DATA_DIR, "genres_deezer.csv")
@@ -105,38 +104,6 @@ def _similarity_space():
   audio = preprocessing.scale(clap)
   genres = GENRE_WEIGHT * _genre_weights(df_rec) @ _genre_similarity_root()
   return df_rec, np.hstack([audio, genres])
-
-
-def input_data_extraction(track_row):
-  """track_row : numero de ligne du catalogue (valeur de title-dropdown)."""
-  df_all = load_catalog()
-  result = df_all.loc[[track_row]].copy()
-  result.reset_index(inplace=True)
-  try:
-      track_artist = result['Artist'][0]
-  except: 
-      track_artist = 'Unknown'
-
-  try:
-      track_title = result['Song'][0]
-  except:
-      track_title = 'Unknown'
-
-  try:
-      track_coverimg_hq = result['Cover'][0]
-  except:
-      track_coverimg_hq = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/600px-No_image_available.svg.png"
-
-  try:
-      audio_preview = result['Preview'][0]
-  except:
-      audio_preview = None
-  try:
-      track_genre = result['family_genre'][0]
-  except:
-      track_genre=None
-  
-  return track_artist, track_title, track_coverimg_hq, audio_preview,track_genre
 
 
 def recommandation_cosine(track_row):

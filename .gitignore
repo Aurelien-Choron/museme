@@ -143,6 +143,6 @@ venv/
 .DS_Store
 __pycache__/
 
-# Master video (179 Mo) : la version web compressee et versionnee est
-# assets/videos/background.mp4
+# Master de l'ancienne video de fond (179 Mo), jamais versionne. Le site
+# statique (2026-10-11) n'a plus de video.
 /assets/videos/Mon film 1.mp4

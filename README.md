@@ -1,17 +1,20 @@
 # Museme
 
-A Dash app that recommends music by cosine similarity, over a catalogue of
-4,724 tracks: 3,815 collected in 2021 and 909 added in October 2026. Each track
-is described by how it sounds (a 512-dimension embedding of its 30-second
-preview, from the pretrained CLAP audio model) and by its Deezer genre.
+Pick a track, hear ten that sound like it. Museme recommends music by cosine
+similarity over a catalogue of 4,724 tracks: 3,815 collected in 2021 and 909
+added in October 2026. Each track is described by how it sounds (a
+512-dimension embedding of its 30-second preview, from the pretrained CLAP
+audio model) and by its Deezer genre.
 
 **[➡ Live demo](https://museme-s4u2.onrender.com)**
-*(Render's free tier sleeps after 15 min of inactivity — the first load takes
-about a minute.)*
 
-Originally written in 2021 on Python 3.7 / Dash 1.19. Brought back to life in
-August 2026 on Python 3.12 — see [Migration](#migration-2021---2026), which is
-where most of the interesting work is.
+The recommendation engine is Python; the site is static. Every track's ten
+nearest neighbours are computed once by the engine and shipped as JSON, so the
+page answers instantly and never waits for a server — see
+[From Dash to a static site](#from-dash-to-a-static-site-october-2026).
+
+Originally written in 2021 on Python 3.7 / Dash 1.19, brought back to life in
+2026 — see [Migration](#migration-2021---2026).
 
 ![Museme recommending tracks similar to Daft Punk's "Get Lucky"](docs/screenshot.png)
 
@@ -61,8 +64,8 @@ in 2021, then extended in 2026.
    `data/embeddings_clap.npy`.
 
 `data/df_66features_clean2.csv` holds the 2021 features for 4,950 tracks (used
-by the summary page); the recommendation catalogue (`data/df_recommendation.csv`)
-has 4,724.
+by the 2021 summary page, kept for history); the recommendation catalogue
+(`data/df_recommendation.csv`) has 4,724.
 
 ## How tracks are compared
 
@@ -71,15 +74,18 @@ has 4,724.
   Apache 2.0), a model pretrained by LAION on pairs of audio and text
   descriptions (music, speech, sounds). The preview is cut into 10-second
   chunks at 48 kHz; each chunk gives 512 numbers; the chunks are averaged into
-  one vector per track. The app standardises each dimension across the
-  catalogue. It only reads the precomputed vectors: Render needs no torch.
+  one vector per track. The engine standardises each dimension across the
+  catalogue. CLAP runs locally only; the site never sees the vectors.
 - **Genre helps.** 17 more columns describe the genre: the main genre (weight
   1), the other Deezer genres of the album (weight 0.5), combined through a
   circle of genres where neighbours count as half-similar and Pop, close to
   everything, sits on its own axis. That block is multiplied by a weight of 4.
   No genre ever pushes another away: at worst it adds nothing.
 - **Cosine similarity** between the chosen track and the whole catalogue; the
-  10 closest tracks are shown.
+  10 closest tracks are shown. `python -m pipeline site` computes them for
+  every track at once, checks each list against the engine's
+  `recommandation_cosine` (4,724 / 4,724 identical), and writes
+  `web/data/`.
 
 **Why CLAP.** The 2021 descriptors, three corrected versions of them and CLAP
 were compared over the whole catalogue, then in a blind listening test: 20
@@ -107,46 +113,60 @@ Settings, tests, listening results and how to roll back:
 
 ## Running it
 
-Requires Python 3.12 (`py -3.12 --version`).
+The site is plain HTML, CSS and JavaScript: no framework, no build step. Any
+static file server works. It cannot be opened as a local file, because it
+fetches its data.
 
 ```powershell
 # from the project folder
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe index.py
+.\.venv\Scripts\python.exe -m http.server 8000 -d web
 ```
 
-Then open http://127.0.0.1:8050/
+Then open http://127.0.0.1:8000/
 
-> Run `index.py`, **not** `app.py`: `app.py` only creates the Dash object,
-> while `index.py` carries the layout and the callbacks.
+Changing the recommendations (engine settings, genres, new tracks) needs the
+engine, on Python 3.12 (`py -3.12 --version`):
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pipeline site    # rewrites web/data/ (~2 min with the full check)
+node --test tests/search.test.mjs                # search tests on the real catalogue (Node 22+)
+```
 
 ### What the user does
 
-1. Landing page: background video and a *Get it, let's try* button.
-2. Clicking it reveals two dropdowns.
-3. Pick an artist, then one of their tracks — or, with no artist selected,
-   search all titles directly (listed as "Title — Artist").
-4. The app shows that track (cover art and an audio preview) and 10 recommendations.
+1. Types in a single search bar: title, artist or album, in any order, with or
+   without accents (*lucky get*, *daft punk get lucky* and *beyonce* all
+   work). Suggestions show the cover; arrows and Enter work, and `/` jumps to
+   the bar. The dice button starts from a random track.
+2. The chosen track appears on the left, its 10 recommendations on the right.
+3. Clicking a recommendation plays its preview in the player bar at the
+   bottom of the screen. Previews follow one another, from the chosen track
+   through the ten recommendations. *Find similar*, on a row or in the
+   player, makes that track the new starting point.
 
-Other pages: `/page-1` summary and a Plotly chart, `/page-2` about, `/page-3` resources.
+Under 600 px the page becomes a single column; the theme follows the
+device's light or dark setting. The *About* page explains the method.
 
 ## Structure
 
 ```
-app.py              the shared Dash object
-index.py            entry point: layout, routing, callbacks
+web/                  the site, published as is
+  index.html, about.html, style.css
+  app.js                search, recommendations, player
+  search.js             search without the DOM (tested by tests/search.test.mjs)
+  data/                 catalog.json and neighbors.json, written by python -m pipeline site
 components/
-  engine/functions.py   data extraction and cosine recommendation
-  layout/               one file per page (home, summary, about_us, ressources)
+  engine/functions.py   the recommendation engine (Python)
 data/                 catalogue (df_recommendation.csv), CLAP vectors, Deezer and 2021 genres
+pipeline/             catalogue growth and site data (local only, never deployed)
+tests/                search tests (Node)
 notebooks/            genre classifier, audio benchmark (evaluation_audio.ipynb)
 docs/                 screenshot, genre circle, recommendation notes (recommandation.md, in French)
-assets/               CSS, images, favicon, background video (served by Dash)
-audio/                working folders from the original app
 legacy/               scripts outside the app, kept for reference
-pipeline/             catalogue growth (local only, never deployed)
-render.yaml           Render deployment blueprint
+render.yaml           Render deployment blueprint (static site)
+requirements.txt      engine (pandas, numpy, scikit-learn)
 requirements-pipeline.txt   pipeline dependencies (librosa, torch...)
 ```
 
@@ -163,16 +183,18 @@ and the CPU build of torch (see `requirements-pipeline.txt`).
 .\.venv\Scripts\python.exe -m pipeline collect     # tracks from the playlists in pipeline/playlists.csv
 .\.venv\Scripts\python.exe -m pipeline extract     # 63 descriptors per track
 .\.venv\Scripts\python.exe -m pipeline merge       # append to the CSV (--dry-run to check)
-.\.venv\Scripts\python.exe -m pipeline embeddings  # CLAP vectors of the new tracks -> data/embeddings_clap.npy
+.\.venv\Scripts\python.exe -m pipeline embeddings  # CLAP vectors of the new tracks -> data/embeddings_clap.npy, then web/data/
 .\.venv\Scripts\python.exe -m pipeline deezer      # Deezer genres, for notebooks/classifieur_genre.ipynb
 .\.venv\Scripts\python.exe -m pipeline genre-lists # secondary genres -> data/genres_deezer.csv
+.\.venv\Scripts\python.exe -m pipeline site        # recommendations of every track -> web/data/
 ```
 
 The audio cache, the Spotify pages and intermediate outputs go to
 `%LOCALAPPDATA%\museme\` (set `MUSEME_WORK_DIR` to change it), outside
 OneDrive. `collect`, `extract` and `embeddings` resume where they stopped.
-**After `merge`, run `embeddings`**: the app refuses to start if a track has no
-CLAP vector (about 2 s per track on CPU).
+**After `merge`, run `embeddings`** (about 2 s per track on CPU): it refuses to
+write if a track has no CLAP vector, then refreshes the site's data. After
+changing genres or engine settings, run `site` on its own.
 
 Worth knowing:
 
@@ -217,30 +239,46 @@ Worth knowing:
   are still computed and written to the CSV (the genre classifier and
   `validate` use them), but the app no longer does.
 
-## Deployment (Render, free tier)
+## Deployment (Render, static site)
 
-The app runs on Render's **free** plan: 512 MB of RAM, sleeps after 15 min
-without traffic (~1 min to wake), 750 h/month per workspace.
+`render.yaml` describes a static site: Render serves `web/` from its CDN. There
+is no server, so nothing sleeps and there is no memory limit to watch. Nothing
+is built on Render either: `web/data/` is written locally by
+`python -m pipeline site` and committed, like `data/embeddings_clap.npy`.
+Every file is served with `Cache-Control: no-cache`, so the browser revalidates
+it on each visit (a 304 when it has not changed) and a new export shows up at
+once.
 
-`render.yaml` describes the whole service. On https://render.com:
-*New > Blueprint*, point it at the GitHub repo, deploy.
+On https://render.com: *New > Blueprint*, point it at the GitHub repo, deploy.
+A Render service cannot change runtime after creation: the static site is a
+separate service from the former Python one.
 
-Three things worth knowing, none of them obvious:
+## From Dash to a static site (October 2026)
 
-- **Render reads neither `Procfile` nor `runtime.txt`.** Both are Heroku
-  leftovers, kept but inert here. The Python version comes from
-  `.python-version`; without it Render would use its current default (3.14),
-  for which the pinned pandas / numpy versions have no wheel.
-- **A single gunicorn worker** (`--workers 1 --threads 4`). Each worker loads
-  its own copy of the catalogue: two workers exceed the 512 MB limit.
-- Measured footprint before the switch to CLAP: ~195 MB at startup and
-  ~206 MB in steady state. With the CLAP vectors (a 9.7 MB file), a local
-  server measured 233 MB after its first recommendation.
+The Dash app, on Render's free plan, was slow for reasons no code change could
+fix: the server went to sleep after 15 minutes without traffic, it had 0.1 CPU,
+and every click was a round trip to it. The catalogue only changes when the
+pipeline runs, though, so the recommendations of every track can be computed
+in advance, and checked against the live function, which leaves the browser
+only a lookup to do. Measured on 2026-10-11:
 
-The free plan allows neither a persistent disk nor scaling: since the app is
-entirely read-only over version-controlled data files, neither matters here.
+| | Dash app (Render free) | Static site |
+|---|---|---|
+| First visit after 15 min idle | 63 s, waking the server | no server to wake |
+| Recommendations after a click | 1.1-1.2 s (3 s the first time) | immediate: a lookup in `neighbors.json` |
+| Search | two dropdowns; the full title list took 2.4 s | one bar, 1.4 ms per keystroke, in the browser |
+| Download on the first visit | ~6.2 MB, including a 5.8 MB background video and 330 KB of Dash, React and Bootstrap | 418 KB compressed: 15 KB of code, 391 KB of data |
+| Covers in the list | 640 px, 206 KB each | 64 px, 3 KB each |
+| Audio | 11 native players | one shared player bar |
+
+The recommendations themselves did not change: same engine, same settings,
+4,724 / 4,724 lists identical. The last version of the Dash app is tagged
+`dash-final`.
 
 ## Migration 2021 -> 2026
+
+*History: this section and the next one describe the Dash app, replaced by
+the static site on 2026-10-11 (tag `dash-final`).*
 
 The business logic was deliberately left untouched. Only what actually
 prevented the app from running was fixed:
@@ -283,20 +321,6 @@ Known issues, deliberately left alone:
   Shaky, but it works.
 - Moving from Bootstrap 4 to 5 may cause slight visual differences; most of the
   design comes from `assets/style.css` anyway.
-
-## Background video
-
-`assets/videos/background.mp4` (5.7 MB) is the web version, and it is the one in
-Git. The original master (`assets/videos/Mon film 1.mp4`, 179 MB) is excluded by
-`.gitignore`: the app no longer uses it, so it can be deleted or archived
-elsewhere. To regenerate it:
-
-```powershell
-ffmpeg -i "assets\videos\Mon film 1.mp4" -an `
-  -vf "gblur=sigma=1.2,scale=854:480:flags=lanczos" `
-  -c:v libx264 -preset slow -crf 33 -pix_fmt yuv420p -g 50 `
-  -movflags +faststart "assets\videos\background.mp4"
-```
 
 ## License
 
