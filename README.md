@@ -6,7 +6,7 @@ added in October 2026. Each track is described by how it sounds (a
 512-dimension embedding of its 30-second preview, from the pretrained CLAP
 audio model) and by its Deezer genre.
 
-**[➡ Live demo](https://museme-s4u2.onrender.com)**
+**[➡ Live demo](https://museme-site.onrender.com)**
 
 The recommendation engine is Python; the site is static. Every track's ten
 nearest neighbours are computed once by the engine and shipped as JSON, so the
@@ -260,14 +260,14 @@ fix: the server went to sleep after 15 minutes without traffic, it had 0.1 CPU,
 and every click was a round trip to it. The catalogue only changes when the
 pipeline runs, though, so the recommendations of every track can be computed
 in advance, and checked against the live function, which leaves the browser
-only a lookup to do. Measured on 2026-10-11:
+only a lookup to do. Measured on 2026-10-11, on the live sites:
 
 | | Dash app (Render free) | Static site |
 |---|---|---|
-| First visit after 15 min idle | 63 s, waking the server | no server to wake |
-| Recommendations after a click | 1.1-1.2 s (3 s the first time) | immediate: a lookup in `neighbors.json` |
+| First visit after 15 min idle | 63 s, waking the server | no server to wake: search usable in 1.3 s |
+| Recommendations after a click | 1.1-1.2 s (3 s the first time) | 5 ms: a lookup in `neighbors.json` |
 | Search | two dropdowns; the full title list took 2.4 s | one bar, 1.4 ms per keystroke, in the browser |
-| Download on the first visit | ~6.2 MB, including a 5.8 MB background video and 330 KB of Dash, React and Bootstrap | 418 KB compressed: 15 KB of code, 391 KB of data |
+| Download on the first visit | ~6.2 MB, including a 5.8 MB background video and 330 KB of Dash, React and Bootstrap | 406 KB (Brotli): 16 KB of code, 383 KB of data |
 | Covers in the list | 640 px, 206 KB each | 64 px, 3 KB each |
 | Audio | 11 native players | one shared player bar |
 
