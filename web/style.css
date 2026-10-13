@@ -120,6 +120,7 @@ a { color: inherit; }
 }
 .brand img { width: 58px; height: 32px; }
 
+.top nav { display: flex; align-items: center; gap: 12px; }
 .top nav a {
   display: inline-block;
   padding: 10px 4px;
@@ -128,6 +129,33 @@ a { color: inherit; }
   font-weight: 500;
 }
 .top nav a:hover { color: var(--text); }
+
+/* Connexion Spotify : seulement dans un navigateur invite (spotify.js). */
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color .15s, background-color .15s;
+}
+.nav-btn:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+.nav-btn[hidden] { display: none; }
+/* Logo Spotify : 21 px au minimum, vert quand la session est prete. */
+.nav-btn .icon { width: 22px; height: 22px; }
+.nav-btn.is-on .icon, .player-spotify { color: #1ed760; }
+/* Telephone : l'icone seule, le logo de Museme garde sa place. */
+@media (max-width: 599px) {
+  .nav-btn { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .nav-btn span { display: none; }
+}
 
 /* ---------- Mise en page ---------- */
 
@@ -547,22 +575,29 @@ mark { background: none; color: inherit; font-weight: 700; }
 .time { min-width: 34px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: center; }
 
 .player-extra { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
+.player-spotify[hidden] { display: none; }
+.player-spotify .icon { width: 22px; height: 22px; }
+.icon-btn.player-spotify:hover { color: #1ed760; }
 
 /* Fine ligne de progression, en une colonne seulement */
 .player-line { display: none; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--line); }
 .player-line span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 
+/* Hors de la barre de lecture : visible aussi avant le premier morceau. */
 .toast {
-  position: absolute;
+  position: fixed;
+  z-index: 50;
   left: 50%;
-  bottom: calc(100% + 12px);
+  bottom: calc(var(--bar-h) + env(safe-area-inset-bottom) + 12px);
+  width: max-content;
+  max-width: calc(100vw - 32px);
   margin: 0;
   padding: 8px 14px;
   border-radius: 8px;
   background: var(--text);
   color: var(--bg);
   font-size: 14px;
-  white-space: nowrap;
+  text-align: center;
   transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;

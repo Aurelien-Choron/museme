@@ -7,6 +7,8 @@ site : recommandations de tout le catalogue -> web/data/, a relancer seule
 apres un changement des genres ou des reglages du moteur.
 Puis deezer : genres des morceaux, pour le classifieur (notebooks/),
 et genre-lists : genres secondaires de l'app (data/genres_deezer.csv).
+spotify-ids : identifiant Spotify de chaque morceau (lecture complete du
+site), puis site pour publier web/data/spotify.json.
 Banc d'essai (hors catalogue) : features-v2, et embeddings avec --window ou --rows.
 """
 import argparse
@@ -44,6 +46,13 @@ def main():
     p.add_argument("--window", type=float, help="secondes analysees, a une position au hasard")
     p.add_argument("--rows", type=int, help="nombre de morceaux tires au hasard")
 
+    p = sub.add_parser("spotify-ids", help="identifiants Spotify des morceaux -> data/spotify_ids.csv")
+    p.add_argument("--sample", type=int, help="essai sur N morceaux de 2021 tires au hasard")
+    p.add_argument("--rematch", action="store_true",
+                   help="reappliquer la regle aux morceaux deja cherches (depuis le cache)")
+    p.add_argument("--max", type=int, dest="max_requests",
+                   help="arret propre apres N recherches envoyees a Spotify (le cache ne compte pas)")
+
     p = sub.add_parser("site", help="catalogue et 10 voisins de chaque morceau -> web/data/")
     p.add_argument("--no-check", action="store_true",
                    help="sans le controle contre recommandation_cosine (~95 s)")
@@ -74,6 +83,9 @@ def main():
     elif args.step == "embeddings":
         from . import embeddings
         embeddings.run(window=args.window, n_rows=args.rows)
+    elif args.step == "spotify-ids":
+        from . import spotify_ids
+        spotify_ids.run(sample=args.sample, rematch=args.rematch, max_requests=args.max_requests)
     elif args.step == "site":
         from . import site
         site.run(check=not args.no_check)

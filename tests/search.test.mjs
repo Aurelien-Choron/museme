@@ -1,4 +1,4 @@
-// node --test tests/
+// node --test tests/*.test.mjs
 // Recherche du site (web/search.js) sur le vrai catalogue (web/data/catalog.json,
 // ecrit par python -m pipeline site).
 import assert from "node:assert/strict";

@@ -1,6 +1,7 @@
 // Museme : recherche, morceau de depart, recommandations et lecteur.
-// Aucune requete apres le chargement, hors pochettes et extraits : les
-// recommandations sont precalculees par python -m pipeline site.
+// Aucune requete apres le chargement, hors pochettes, extraits et suite de la
+// file de lecture (queue.json) : les recommandations sont precalculees par
+// python -m pipeline site.
 
 import { createIndex, highlight, search } from "./search.js";
 
@@ -36,6 +37,8 @@ const EXAMPLES = [
 ];
 const EXAMPLES_SHOWN = 4;
 const SUGGESTIONS = 8;
+const RECOS_SHOWN = 10; // la lecture enchaine ensuite jusqu'au 50e voisin
+const SPOTIFY_CLIENT_KEY = "museme-spotify-client";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -46,16 +49,19 @@ const els = {
   player: $("player"), pCover: $("p-cover"), pTitle: $("p-title"), pArtist: $("p-artist"),
   pPrev: $("p-prev"), pPlay: $("p-play"), pNext: $("p-next"), pSimilar: $("p-similar"),
   pSeek: $("p-seek"), pTime: $("p-time"), pDuration: $("p-duration"), pLine: $("p-line"),
-  pMute: $("p-mute"), pVolume: $("p-volume"), toast: $("toast"),
+  pMute: $("p-mute"), pVolume: $("p-volume"), pSpotify: $("p-spotify"), toast: $("toast"),
+  spotify: $("spotify"),
 };
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 let tracks = [];
 let genres = [];
-let neighbors = [];
+let neighbors = [];  // les 10 voisins affiches
+let more = null;     // voisins 11 a 50 (queue.json), charges au premier morceau joue
+let moreRequest = null;
 let index = [];
 let seed = null;     // ligne du morceau de depart
-let queue = [];      // ordre de lecture : le depart puis ses recommandations
+let queue = [];      // ordre de lecture : le depart puis ses 50 voisins
 let playing = null;  // ligne chargee dans le lecteur (en lecture ou en pause)
 let results = [];    // suggestions affichees
 let active = -1;     // suggestion choisie au clavier
@@ -72,9 +78,23 @@ function track(row) {
 }
 
 // Point d'entree des reglages du lot 2 : seule fonction a remplacer pour
-// recommander autrement.
+// recommander autrement. Les RECOS_SHOWN premiers sont affiches ; tous sont
+// enchaines a la lecture.
 function recommend(row) {
-  return neighbors[row];
+  return more ? neighbors[row].concat(more[row]) : neighbors[row];
+}
+
+// Suite de la file (365 Ko compresses) : au premier morceau joue, pas a la
+// visite. Une session Spotify l'attend avant d'envoyer la file.
+function loadMore() {
+  moreRequest ??= fetchJson("data/queue.json").then((data) => {
+    more = data;
+    if (seed != null) queue = [seed, ...recommend(seed)];
+  }).catch((err) => {
+    console.warn(err);
+    moreRequest = null;
+  });
+  return moreRequest;
 }
 
 function coverUrl(id, size) {
@@ -148,7 +168,7 @@ function renderSeed() {
       h("h2", { class: "seed-title", title: t.title }, t.title),
       h("p", { class: "seed-artist" }, t.artist),
       t.album && h("p", { class: "seed-album", title: t.album }, t.album),
-      h("button", { class: "play-pill", type: "button", id: "seed-play" }, icon("play"), h("span", {}, "Play preview")),
+      h("button", { class: "play-pill", type: "button", id: "seed-play" }, icon("play"), h("span", {}, playLabel(seed))),
     ),
   );
   els.seed.hidden = false;
@@ -158,9 +178,19 @@ function renderRecos() {
   const rows = recommend(seed);
   queue = [seed, ...rows];
   els.recosSeed.textContent = track(seed).title;
-  els.recoList.replaceChildren(...rows.map((row, i) => recoRow(track(row), i + 1)));
+  els.recoList.replaceChildren(...rows.slice(0, RECOS_SHOWN).map((row, i) => recoRow(track(row), i + 1)));
   els.recos.hidden = false;
+  growList();
   syncPlaying();
+}
+
+// Quand la lecture depasse les recommandations affichees, la liste s'allonge
+// jusqu'au morceau joue (numerotation continue).
+function growList() {
+  const rank = queue.indexOf(playing);
+  for (let i = els.recoList.children.length + 1; i <= rank; i++) {
+    els.recoList.append(recoRow(track(queue[i]), i));
+  }
 }
 
 function recoRow(t, rank) {
@@ -217,19 +247,45 @@ function renderExamples() {
 
 // ---------- Lecteur ----------
 
-function play(row) {
-  if (playing !== row) {
-    playing = row;
+// Deux sources de lecture, meme interface : l'extrait de 30 s, pour tous, et
+// le morceau entier par Spotify (spotify.js), pour une session invitee.
+const preview = {
+  start(row) {
     audio.src = PREVIEW_URL + tracks[row][5];
-    renderPlayer();
+    this.resume();
+  },
+  resume() {
+    audio.play().catch((err) => {
+      if (err.name !== "AbortError") console.warn(err);
+    });
+  },
+  pause: () => audio.pause(),
+  get paused() { return audio.paused; },
+  get position() { return audio.currentTime; },
+  get duration() { return Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 30; },
+  seek(seconds) { audio.currentTime = seconds; },
+};
+let source = preview;
+let spotify = null; // session Spotify prete (spotify.js), sinon null
+
+function play(row) {
+  const wanted = spotify?.has(row) ? spotify : preview;
+  if (wanted !== source) {
+    source.pause();
+    source = wanted;
+  } else if (playing === row) {
+    source.resume();
+    return;
   }
-  audio.play().catch((err) => {
-    if (err.name !== "AbortError") console.warn(err);
-  });
+  playing = row;
+  renderPlayer();
+  growList();
+  source.start(row);
+  loadMore();
 }
 
 function togglePlay(row) {
-  if (playing === row && !audio.paused) audio.pause();
+  if (playing === row && !source.paused) source.pause();
   else play(row);
 }
 
@@ -240,13 +296,29 @@ function step(delta) {
   return true;
 }
 
+// Fin d'un extrait : le suivant, en attendant la suite de la file si elle
+// n'est pas encore chargee ; apres le 50e, arret.
+async function advance() {
+  if (step(1)) return;
+  if (!more) {
+    await loadMore();
+    if (step(1)) return;
+  }
+  audio.currentTime = 0;
+  syncPlaying();
+}
+
 function previous() {
-  if (audio.currentTime > 3 || queue.indexOf(playing) <= 0) {
-    audio.currentTime = 0;
+  if (source.position > 3 || queue.indexOf(playing) <= 0) {
+    source.seek(0);
     play(playing);
   } else {
     step(-1);
   }
+}
+
+function playLabel(row) {
+  return spotify?.has(row) ? "Play" : "Play preview";
 }
 
 function renderPlayer() {
@@ -255,6 +327,10 @@ function renderPlayer() {
   els.pTitle.textContent = t.title;
   els.pTitle.title = t.title;
   els.pArtist.textContent = t.artist;
+  // Attribution Spotify : lien vers le morceau joue en entier.
+  const url = source === spotify ? spotify.trackUrl(playing) : null;
+  els.pSpotify.hidden = !url;
+  if (url) els.pSpotify.href = url;
   els.player.hidden = false;
   document.body.classList.add("has-player");
   updateProgress();
@@ -270,7 +346,7 @@ function renderPlayer() {
 
 // Etat de lecture partout ou il se voit : lignes, carte de depart, barre.
 function syncPlaying() {
-  const isPlaying = playing != null && !audio.paused;
+  const isPlaying = playing != null && !source.paused;
   for (const li of els.recoList.children) {
     const current = Number(li.dataset.row) === playing;
     li.classList.toggle("is-current", current);
@@ -280,7 +356,7 @@ function syncPlaying() {
   if (seedPlay) {
     const on = playing === seed && isPlaying;
     setIcon(seedPlay, on ? "pause" : "play");
-    seedPlay.lastChild.textContent = on ? "Pause" : "Play preview";
+    seedPlay.lastChild.textContent = on ? "Pause" : playLabel(seed);
   }
   setIcon(els.pPlay, isPlaying ? "pause" : "play");
   els.pPlay.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
@@ -293,9 +369,9 @@ function formatTime(seconds) {
 }
 
 function updateProgress() {
-  const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 30;
-  const position = Math.min(audio.currentTime, duration);
-  const percent = `${(position / duration) * 100}%`;
+  const duration = source.duration;
+  const position = Math.min(source.position, duration);
+  const percent = `${duration > 0 ? (position / duration) * 100 : 0}%`;
   els.pSeek.max = duration;
   if (!seeking) els.pSeek.value = position;
   els.pSeek.style.setProperty("--p", percent);
@@ -314,19 +390,14 @@ function toast(message) {
 
 audio.addEventListener("play", syncPlaying);
 audio.addEventListener("pause", syncPlaying);
-audio.addEventListener("timeupdate", updateProgress);
-audio.addEventListener("loadedmetadata", updateProgress);
-// Les extraits s'enchainent : le depart, puis les 10 recommandations.
-audio.addEventListener("ended", () => {
-  if (!step(1)) {
-    audio.currentTime = 0;
-    syncPlaying();
-  }
-});
+audio.addEventListener("timeupdate", () => { if (source === preview) updateProgress(); });
+audio.addEventListener("loadedmetadata", () => { if (source === preview) updateProgress(); });
+// Les extraits s'enchainent : le depart, puis ses 50 voisins.
+audio.addEventListener("ended", () => { if (source === preview) advance(); });
 audio.addEventListener("error", () => {
-  if (!audio.src) return;
+  if (!audio.src || source !== preview) return;
   toast("Preview unavailable");
-  if (!step(1)) syncPlaying();
+  advance();
 });
 
 els.pPlay.addEventListener("click", () => togglePlay(playing));
@@ -340,27 +411,32 @@ els.pSeek.addEventListener("input", () => {
   els.pTime.textContent = formatTime(els.pSeek.value);
 });
 els.pSeek.addEventListener("change", () => {
-  audio.currentTime = Number(els.pSeek.value);
+  source.seek(Number(els.pSeek.value));
   seeking = false;
 });
 
-function setVolume(volume) {
-  audio.volume = volume;
-  audio.muted = volume === 0;
-  els.pVolume.value = volume;
-  els.pVolume.style.setProperty("--p", `${volume * 100}%`);
+// Le volume et la sourdine sont ceux de l'element audio, repris par Spotify.
+const volume = () => (audio.muted ? 0 : audio.volume);
+
+function setVolume(value) {
+  audio.volume = value;
+  audio.muted = value === 0;
+  els.pVolume.value = value;
+  els.pVolume.style.setProperty("--p", `${value * 100}%`);
   setIcon(els.pMute, audio.muted ? "mute" : "volume");
   els.pMute.setAttribute("aria-label", audio.muted ? "Unmute" : "Mute");
+  spotify?.setVolume(volume());
 }
 els.pVolume.addEventListener("input", () => {
-  const volume = Number(els.pVolume.value);
-  setVolume(volume);
-  try { localStorage.setItem("museme-volume", String(volume)); } catch { /* stockage indisponible */ }
+  const value = Number(els.pVolume.value);
+  setVolume(value);
+  try { localStorage.setItem("museme-volume", String(value)); } catch { /* stockage indisponible */ }
 });
 els.pMute.addEventListener("click", () => {
   audio.muted = !audio.muted;
   setIcon(els.pMute, audio.muted ? "mute" : "volume");
   els.pMute.setAttribute("aria-label", audio.muted ? "Unmute" : "Mute");
+  spotify?.setVolume(volume());
 });
 try {
   const saved = Number(localStorage.getItem("museme-volume"));
@@ -373,10 +449,10 @@ try {
 if ("mediaSession" in navigator) {
   const actions = {
     play: () => { if (playing != null) play(playing); },
-    pause: () => audio.pause(),
+    pause: () => source.pause(),
     previoustrack: previous,
     nexttrack: () => step(1),
-    seekto: (details) => { audio.currentTime = details.seekTime; },
+    seekto: (details) => source.seek(details.seekTime),
   };
   for (const [action, handler] of Object.entries(actions)) {
     try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* action non geree */ }
@@ -495,6 +571,69 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ---------- Session Spotify (morceaux entiers, comptes invites) ----------
+
+// Seulement dans un navigateur ouvert une fois avec le lien prive
+// #spotify=<Client ID> : les visiteurs ne chargent pas spotify.js.
+function invited() {
+  if (/[#&]spotify=/.test(location.hash)) return true;
+  try { return localStorage.getItem(SPOTIFY_CLIENT_KEY) !== null; } catch { return false; }
+}
+
+async function startSpotify() {
+  const { connect } = await import("./spotify.js");
+  connect({
+    button: els.spotify,
+    queue: () => queue,
+    queueReady: loadMore,
+    volume,
+    toast,
+    // Session prete : les morceaux qui ont un identifiant se jouent en entier.
+    ready(session) {
+      spotify = session;
+      syncPlaying();
+    },
+    // Fin de session (deconnexion, jeton expire, compte refuse) : extraits.
+    ended() {
+      const wasPlaying = source === spotify;
+      spotify = null;
+      if (wasPlaying) {
+        source = preview;
+        renderPlayer();
+      }
+      syncPlaying();
+    },
+    // Lecture, pause, position.
+    state() {
+      if (source !== spotify) return;
+      syncPlaying();
+      updateProgress();
+    },
+    time() { if (source === spotify) updateProgress(); },
+    // Spotify enchaine la file envoyee et signale chaque nouveau morceau.
+    track(row) {
+      if (source !== spotify || row === playing) return;
+      if (!queue.includes(row)) {
+        // Morceau de la file d'un ancien depart : on passe a la file
+        // actuelle, comme les extraits.
+        if (!step(1)) source.pause();
+        return;
+      }
+      playing = row;
+      renderPlayer();
+      growList();
+      syncPlaying();
+    },
+    // Spotify n'a pas pu jouer ce morceau : son extrait a la place.
+    fail(row) {
+      if (source !== spotify || playing !== row) return;
+      source = preview;
+      preview.start(row);
+      renderPlayer();
+    },
+  });
+}
+
 // ---------- Chargement ----------
 
 async function fetchJson(url) {
@@ -526,3 +665,4 @@ async function load() {
 }
 
 load();
+if (invited()) startSpotify().catch((err) => console.warn(err));

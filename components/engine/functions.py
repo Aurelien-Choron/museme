@@ -106,9 +106,11 @@ def _similarity_space():
   return df_rec, np.hstack([audio, genres])
 
 
-def recommandation_cosine(track_row):
+def recommandation_cosine(track_row, n=11):
   """track_row : numero de ligne du catalogue, et non le titre : 54 titres
-  existent chez plusieurs artistes (Baby : Brandy et Justin Bieber)."""
+  existent chez plusieurs artistes (Baby : Brandy et Justin Bieber).
+  n : nombre de voisins renvoyes, du plus proche au moins proche
+  (50 pour le controle de la file de lecture du site, pipeline/site.py)."""
   df_rec, data_scaled = _similarity_space()
   index_input = track_row
 
@@ -121,7 +123,7 @@ def recommandation_cosine(track_row):
   series = series.drop(index_input)
   # Le morceau lui-meme est retire ci-dessus. Jusqu'au 2026-10-09, [1:12]
   # sautait en plus le meilleur voisin (depuis 2021).
-  resultat = list(series.index)[0:11]
+  resultat = list(series.index)[0:n]
   output = df_rec.iloc[resultat][["Song", "Artist", "Preview", "Main_Genre", "Cover"]]
 
   return output
