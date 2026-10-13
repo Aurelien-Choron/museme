@@ -17,12 +17,17 @@ from .extract import NEW_TRACKS_CSV, preview_hash
 
 
 def normalize(text):
-    """'Señorita (feat. X) - Remastered 2011' -> 'senorita'"""
+    """'Señorita (feat. X) - Remastered 2011' -> 'senorita' ; '湖' -> '湖'.
+
+    Les ecritures non latines sont gardees : jusqu'au 2026-10-12, [^0-9a-z]
+    reduisait 129 titres du catalogue (japonais, chinois...) a une chaine
+    vide, et tous les titres d'un tel artiste avaient la meme cle.
+    """
     text = unicodedata.normalize("NFKD", str(text))
     text = "".join(c for c in text if not unicodedata.combining(c)).lower()
     text = re.sub(r"\(.*?\)|\[.*?\]", " ", text)
     text = text.split(" - ")[0]
-    return re.sub(r"[^0-9a-z]+", " ", text).strip()
+    return " ".join(re.sub(r"[\W_]+", " ", text).split())
 
 
 def run():
