@@ -45,9 +45,9 @@ test("un titre partage par deux artistes est propose deux fois", () => {
 });
 
 test("un artiste : ses morceaux d'abord, puis les titres qui le citent", () => {
-  const results = find("madonna");
+  const results = find("madonna", 20);
   const own = tracks.filter((t) => t[1] === "Madonna").length;
-  assert.ok(own > 0 && own < 8);
+  assert.ok(own > 0 && own < 20);
   assert.ok(results.slice(0, own).every((r) => r.endsWith("— Madonna")), results.join(", "));
   assert.ok(results.includes("I Could Be Madonna — Barry Can't Swim"), results.join(", "));
 });

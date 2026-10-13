@@ -1,7 +1,7 @@
 # Museme
 
 Pick a track, hear ten that sound like it. Museme recommends music by cosine
-similarity over a catalogue of 4,724 tracks: 3,815 collected in 2021 and 909
+similarity over a catalogue of 5,469 tracks: 3,815 collected in 2021 and 1,654
 added in October 2026. Each track is described by how it sounds (a
 512-dimension embedding of its 30-second preview, from the pretrained CLAP
 audio model) and by its Deezer genre.
@@ -56,7 +56,8 @@ in 2021, then extended in 2026.
    review also found that the 2021 extraction read the stereo preview as mono
    at the wrong rate: the analysed signal was four times too long and two
    octaves too low.
-4. **909 tracks added in October 2026**, from Spotify's public embed pages, with
+4. **1,654 tracks added in October 2026** (909, then 745 hits from the 1980s
+   to today), from Spotify's public embed pages, with
    the same descriptors (the 2021 extraction code was recovered and ported, bugs
    included) — see [Growing the catalogue](#growing-the-catalogue).
 5. **CLAP audio embeddings (2026)** — one 512-dimension vector per track,
@@ -65,7 +66,7 @@ in 2021, then extended in 2026.
 
 `data/df_66features_clean2.csv` holds the 2021 features for 4,950 tracks (used
 by the 2021 summary page, kept for history); the recommendation catalogue
-(`data/df_recommendation.csv`) has 4,724.
+(`data/df_recommendation.csv`) has 5,469.
 
 ## How tracks are compared
 
@@ -84,7 +85,7 @@ by the 2021 summary page, kept for history); the recommendation catalogue
 - **Cosine similarity** between the chosen track and the whole catalogue; the
   10 closest tracks are shown. `python -m pipeline site` computes them for
   every track at once, checks each list against the engine's
-  `recommandation_cosine` (4,724 / 4,724 identical), and writes
+  `recommandation_cosine` (5,469 / 5,469 identical), and writes
   `web/data/`.
 
 **Why CLAP.** The 2021 descriptors, three corrected versions of them and CLAP
@@ -213,6 +214,12 @@ Worth knowing:
   without an account, in the same format as the catalogue, but they are not an
   API: they can change or disappear without notice, and this use is not
   covered by Spotify's developer terms.
+- **One vector per song.** `collect` skips tracks already in the catalogue
+  (same preview, or same artist and normalised title) and duplicates across
+  playlists. Same titles under another artist (covers, P!nk / Pink) are kept
+  but listed in `%LOCALAPPDATA%\museme\out\doublons_possibles.csv`, to review
+  before `merge`. Each `collect` archives the previous batch as
+  `new_tracks_<date>.csv`.
 - **Genres come from Deezer.** `deezer` looks up the genre of each track's
   album on Deezer's public API (no account), into
   `%LOCALAPPDATA%\museme\out\deezer_genres.csv`. The notebook
