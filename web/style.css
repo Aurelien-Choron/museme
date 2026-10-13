@@ -439,6 +439,19 @@ mark { background: none; color: inherit; font-weight: 700; }
 .chip img, .chip .cover-missing { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; }
 .chip span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
 .chip b { font-weight: 600; }
+.chip-surprise { display: none; }
+.chip-surprise .icon { width: 34px; height: 34px; padding: 7px; border-radius: 50%; background: var(--hover); flex: none; }
+
+/* Accueil sur mobile : sans la phrase d'explication (reprise dans About), une
+   recherche a 16 px qui laisse lire tout le texte indicatif, et le de en
+   derniere puce des exemples plutot qu'a cote de la recherche. */
+@media (max-width: 599px) {
+  .hero p { display: none; }
+  .hero { margin-bottom: 10px; }
+  .is-empty .search input { font-size: 16px; }
+  .is-empty .surprise { display: none; }
+  .chip-surprise { display: inline-flex; }
+}
 
 /* ---------- Recommandations ---------- */
 

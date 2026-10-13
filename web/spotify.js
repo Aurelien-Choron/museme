@@ -39,6 +39,18 @@ export function randomString(length) {
   return Array.from(crypto.getRandomValues(new Uint8Array(length)), (b) => chars[b & 63]).join("");
 }
 
+// Fragment de l'adresse -> Client ID de l'invitation : null sans invitation,
+// "" si le lien est abime. Tolere ce qu'ajoute un copier-coller (<id>,
+// espaces, guillemets, encodage, majuscules).
+export function invitationId(hash) {
+  const found = hash.match(/[#&]spotify=([^&]*)/);
+  if (!found) return null;
+  let value = found[1];
+  try { value = decodeURIComponent(value); } catch { /* valeur brute */ }
+  const id = value.replace(/[^0-9a-z]/gi, "").toLowerCase();
+  return /^[0-9a-f]{32}$/.test(id) ? id : "";
+}
+
 // File de lecture -> URI envoyees a Spotify et position du morceau demande.
 // Les morceaux sans identifiant sont sautes.
 export function playList(queue, ids, row) {
@@ -74,14 +86,12 @@ function write(storage, key, value) {
 
 // Invitation : #spotify=<Client ID> est garde dans ce navigateur, puis retire
 // de l'adresse (un fragment n'est jamais envoye au serveur). opened : le lien
-// vient d'etre ouvert.
+// vient d'etre ouvert ; broken : le lien est abime.
 function invitation() {
-  const found = location.hash.match(/[#&]spotify=([0-9a-f]{32})\b/i);
-  if (found) {
-    write(localStorage, CLIENT_KEY, found[1]);
-    history.replaceState(null, "", location.pathname + location.search);
-  }
-  return { clientId: read(localStorage, CLIENT_KEY), opened: Boolean(found) };
+  const id = invitationId(location.hash);
+  if (id !== null) history.replaceState(null, "", location.pathname + location.search);
+  if (id) write(localStorage, CLIENT_KEY, id);
+  return { clientId: read(localStorage, CLIENT_KEY), opened: Boolean(id), broken: id === "" };
 }
 
 // ---------- Connexion et jetons ----------
@@ -142,7 +152,8 @@ async function finishLogin(clientId) {
 // ---------- Session ----------
 
 export async function connect(hooks) {
-  const { clientId, opened } = invitation();
+  const { clientId, opened, broken } = invitation();
+  if (broken) hooks.toast("This Spotify invitation link is incomplete — copy it again in full");
   if (!clientId) return;
   const button = hooks.button;
 

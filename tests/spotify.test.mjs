@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { base64url, challenge, playList, randomString, rowOf } from "../web/spotify.js";
+import { base64url, challenge, invitationId, playList, randomString, rowOf } from "../web/spotify.js";
 
 test("defi PKCE : exemple de la RFC 7636 (annexe B)", async () => {
   assert.equal(await challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
@@ -46,4 +46,18 @@ test("morceau joue -> ligne : par identifiant, linked_from, de preference dans l
   const shared = [ids[0], ids[0], null];
   assert.equal(rowOf({ id: ids[0] }, shared, [2, 1]), 1);
   assert.equal(rowOf({ id: ids[0] }, shared, []), 0);
+});
+
+test("lien d'invitation : identifiant lu malgre le copier-coller, lien abime repere", () => {
+  const id = "0123456789abcdef0123456789abcdef";
+  assert.equal(invitationId(`#spotify=${id}`), id);
+  assert.equal(invitationId(`#x=1&spotify=${id}&y=2`), id);
+  assert.equal(invitationId(`#spotify=<${id}>`), id);
+  assert.equal(invitationId(`#spotify=%3C${id}%3E`), id);
+  assert.equal(invitationId(`#spotify=%20${id.toUpperCase()}%20`), id);
+  assert.equal(invitationId(`#spotify=${id}x`), "");
+  assert.equal(invitationId(`#spotify=${id.slice(1)}`), "");
+  assert.equal(invitationId("#spotify="), "");
+  assert.equal(invitationId(""), null);
+  assert.equal(invitationId("#top"), null);
 });

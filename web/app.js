@@ -242,7 +242,11 @@ function renderExamples() {
     return h("button", { class: "chip", type: "button", "data-row": row },
       cover(t, "", 64, { loading: "lazy", width: 34, height: 34 }),
       h("span", {}, h("b", {}, shortTitle(t.title)), ` · ${t.artist}`));
-  }));
+  }),
+  // Sur mobile, le de quitte la barre de recherche et devient la derniere
+  // puce (style.css) : la recherche garde toute la largeur.
+  h("button", { class: "chip chip-surprise", type: "button", "data-surprise": true },
+    icon("dice"), h("span", {}, h("b", {}, "Random track"))));
 }
 
 // ---------- Lecteur ----------
@@ -541,10 +545,12 @@ els.results.addEventListener("click", (e) => {
   if (li) choose(Number(li.dataset.row));
 });
 
-els.surprise.addEventListener("click", () => setSeed(Math.floor(Math.random() * tracks.length)));
+const surprise = () => setSeed(Math.floor(Math.random() * tracks.length));
+els.surprise.addEventListener("click", surprise);
 els.examples.addEventListener("click", (e) => {
   const chip = e.target.closest("[data-row]");
   if (chip) setSeed(Number(chip.dataset.row));
+  else if (e.target.closest("[data-surprise]")) surprise();
 });
 els.seed.addEventListener("click", (e) => {
   if (e.target.closest("#seed-play")) togglePlay(seed);
@@ -666,3 +672,8 @@ async function load() {
 
 load();
 if (invited()) startSpotify().catch((err) => console.warn(err));
+// Lien prive ouvert dans un onglet ou Museme est deja charge : le navigateur
+// change seulement le fragment, sans recharger. On recharge pour le lire.
+addEventListener("hashchange", () => {
+  if (/[#&]spotify=/.test(location.hash)) location.reload();
+});
