@@ -4,8 +4,15 @@ Un meme morceau ne doit avoir qu'un vecteur : on ecarte ceux deja presents
 au catalogue (meme extrait, ou meme couple artiste / titre normalise) et les
 doublons entre playlists (meme id Spotify, ou meme artiste / titre sous un
 autre id : single et version album, par exemple).
+
+Le lot precedent (new_tracks.csv) est archive en new_tracks_<date>.csv avant
+d'etre remplace : spotify_ids y lit les identifiants des lots deja ajoutes.
+Les titres deja presents au catalogue sous un autre artiste (P!nk / Pink,
+reprises...) ne sont pas ecartes : ils vont dans OUT_DIR/doublons_possibles.csv,
+a relire avant merge.
 """
 import re
+import time
 import unicodedata
 
 import pandas as pd
@@ -82,7 +89,20 @@ def run():
             print(f"  {i}/{len(candidates)} morceaux examines", flush=True)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(NEW_TRACKS_CSV, index=False)
+    if NEW_TRACKS_CSV.exists():
+        stamp = time.strftime("%Y-%m-%d", time.localtime(NEW_TRACKS_CSV.stat().st_mtime))
+        NEW_TRACKS_CSV.replace(NEW_TRACKS_CSV.with_name(f"new_tracks_{stamp}.csv"))
+    new = pd.DataFrame(rows)
+    new.to_csv(NEW_TRACKS_CSV, index=False)
     print(f"{len(candidates)} morceaux distincts, {len(rows)} retenus -> {NEW_TRACKS_CSV}")
     for label, count in stats.items():
         print(f"  ecartes, {label} : {count}")
+
+    # Meme titre qu'un morceau du catalogue, artiste ecrit autrement.
+    if len(new):
+        known = catalog.assign(title=catalog["Song"].map(normalize))[["title", "Artist", "Song"]]
+        twins = (new.assign(title=new["Song"].map(normalize))
+                 .merge(known, on="title", suffixes=("", "_catalogue")))
+        twins.to_csv(OUT_DIR / "doublons_possibles.csv", index=False)
+        print(f"  doublons possibles (meme titre, autre artiste) : {twins['track_id'].nunique()} "
+              f"-> {OUT_DIR / 'doublons_possibles.csv'}")

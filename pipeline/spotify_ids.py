@@ -246,10 +246,16 @@ def _preview_hash(url):
 
 
 def from_collect(catalog):
-    """Identifiants connus par la collecte de 2026, par hash de l'extrait."""
-    if not NEW_TRACKS_CSV.exists():
+    """Identifiants connus par les collectes, par hash de l'extrait.
+
+    Tous les lots : new_tracks.csv et les lots precedents archives a cote
+    (new_tracks_<date>.csv). Sans eux, --rematch rechercherait leurs morceaux
+    par l'API.
+    """
+    files = sorted(NEW_TRACKS_CSV.parent.glob("new_tracks*.csv"))
+    if not files:
         return {}
-    new = pd.read_csv(NEW_TRACKS_CSV)
+    new = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     by_hash = dict(zip(new["Preview"].map(_preview_hash), new["track_id"]))
     return {row: by_hash[h] for row, h in catalog["Preview"].map(_preview_hash).items() if h in by_hash}
 
