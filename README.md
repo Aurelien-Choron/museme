@@ -1,7 +1,7 @@
 # Museme
 
 Pick a track, hear ten that sound like it. Museme recommends music by cosine
-similarity over a catalogue of 5,469 tracks: 3,815 collected in 2021 and 1,654
+similarity over a catalogue of 5,465 tracks: 3,811 collected in 2021 and 1,654
 added in October 2026. Each track is described by how it sounds (a
 512-dimension embedding of its 30-second preview, from the pretrained CLAP
 audio model) and by its Deezer genre.
@@ -66,7 +66,7 @@ in 2021, then extended in 2026.
 
 `data/df_66features_clean2.csv` holds the 2021 features for 4,950 tracks (used
 by the 2021 summary page, kept for history); the recommendation catalogue
-(`data/df_recommendation.csv`) has 5,469.
+(`data/df_recommendation.csv`) has 5,465.
 
 ## How tracks are compared
 
@@ -85,7 +85,7 @@ by the 2021 summary page, kept for history); the recommendation catalogue
 - **Cosine similarity** between the chosen track and the whole catalogue; the
   10 closest tracks are shown. `python -m pipeline site` computes them for
   every track at once, checks each list against the engine's
-  `recommandation_cosine` (5,469 / 5,469 identical), and writes
+  `recommandation_cosine` (5,465 / 5,465 identical), and writes
   `web/data/`.
 
 **Why CLAP.** The 2021 descriptors, three corrected versions of them and CLAP

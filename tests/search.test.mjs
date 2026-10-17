@@ -65,11 +65,12 @@ test("requete vide ou sans resultat", () => {
 });
 
 test("un meme titre du meme artiste n'apparait qu'une fois", () => {
-  // We'll Be Coming Back (Calvin Harris) et Spell of Destruction (Burzum) :
-  // deux albums, meme morceau, a la casse pres pour le second.
+  // Spell of Destruction (Burzum) : deux albums, deux enregistrements, meme
+  // titre a la casse pres. We'll Be Coming Back (Calvin Harris), en double
+  // jusqu'au 2026-10-17, a quitte le catalogue.
   const keys = new Set(index.map((e) => e.title + "|" + e.artist));
   assert.equal(keys.size, index.length);
-  assert.equal(index.length, tracks.length - 2);
+  assert.equal(index.length, tracks.length - 1);
   assert.equal(find("spell of destruction").length, 1);
 });
 

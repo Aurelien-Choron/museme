@@ -68,8 +68,12 @@ ACCEPTED = ("playlist", "pochette", "album", "titre")
 # Seules mentions ignorees dans un titre (decision du 2026-10-12) : les
 # invites, la remasterisation et « Original Mix ». Tout le reste compte :
 # « Sleepyhead - Stripped Down Version » n'est pas « Sleepyhead ».
-_FEAT = re.compile(r"\s*[(\[](?:feat\.?|ft\.?|featuring|with)\s[^)\]]*[)\]]", re.I)
-_REMASTER = re.compile(r"\s*[(\[][^)\]]*remaster[^)\]]*[)\]]|\s+-\s+[^-]*remaster[^-]*$", re.I)
+# Toutes leurs ecritures (2026-10-17) : « Breathe - feat. Sondar » est
+# « Breathe (feat. Sondar) », « Che - 2019 - Remaster » est « Che (2019 - Remaster) ».
+_FEAT = re.compile(r"\s*[(\[](?:feat\.?|ft\.?|featuring|with)\s[^)\]]*[)\]]"
+                   r"|\s+-\s+(?:feat\.?|ft\.?|featuring)\s(?:(?!\s-\s).)*(?=\s-\s|$)", re.I)
+_REMASTER = re.compile(r"\s*[(\[][^)\]]*remaster[^)\]]*[)\]]|\s+-\s+[^-]*remaster[^-]*$"
+                       r"|\s+-\s+\d{4}\s+-\s+[^-]*remaster[^-]*$", re.I)
 _ORIGINAL_MIX = re.compile(r"\s*[(\[]original mix[)\]]|\s+-\s+original mix$", re.I)
 # Album : sans la mention d'edition (« (Deluxe Edition) », « [2020 Remaster] »).
 _EDITION = re.compile(r"\s*[(\[][^)\]]*(?:edition|deluxe|expanded|anniversary|bonus|version)[^)\]]*[)\]]", re.I)
