@@ -16,6 +16,11 @@ ignores (title_key). L'artiste doit correspondre dans tous les cas.
 - pochette : meme titre, meme pochette d'album ;
 - album : meme titre, meme nom d'album (la pochette a change depuis 2021) ;
 - titre : meme titre, sur un autre album (compilation, reedition) ;
+- oeuvre : classique seulement (Main_Genre Classical), la meme oeuvre dans une
+  autre interpretation : tous les mots du titre du catalogue, hors parentheses
+  et mention d'acte, sont dans le titre Spotify, et pas d'arrangement que le
+  catalogue n'annonce pas (decision du 2026-10-22 : l'artiste du catalogue est
+  le compositeur, et toute version entiere de l'oeuvre convient) ;
 - douteux : meme titre de base, mais une autre version (remix, live, autre
   prise...) ;
 - aucun : rien de convenable dans les resultats.
@@ -63,8 +68,8 @@ TOKEN_URL = "https://accounts.spotify.com/api/token"
 MARKET = "FR"
 MIN_INTERVAL = 0.5  # secondes entre deux requetes a l'API
 # Niveaux retenus par le site : fixes par l'utilisateur apres l'essai sur
-# 100 morceaux.
-ACCEPTED = ("playlist", "pochette", "album", "titre")
+# 100 morceaux, plus oeuvre pour le classique (2026-10-22).
+ACCEPTED = ("playlist", "pochette", "album", "titre", "oeuvre")
 # Seules mentions ignorees dans un titre (decision du 2026-10-12) : les
 # invites, la remasterisation et « Original Mix ». Tout le reste compte :
 # « Sleepyhead - Stripped Down Version » n'est pas « Sleepyhead ».
@@ -77,6 +82,12 @@ _REMASTER = re.compile(r"\s*[(\[][^)\]]*remaster[^)\]]*[)\]]|\s+-\s+[^-]*remaste
 _ORIGINAL_MIX = re.compile(r"\s*[(\[]original mix[)\]]|\s+-\s+original mix$", re.I)
 # Album : sans la mention d'edition (« (Deluxe Edition) », « [2020 Remaster] »).
 _EDITION = re.compile(r"\s*[(\[][^)\]]*(?:edition|deluxe|expanded|anniversary|bonus|version)[^)\]]*[)\]]", re.I)
+# Classique : mention d'acte, ecrite de bien des facons d'un disque a l'autre
+# (« Act 1 », « Act I », « ACT1 », « 1. Akt ») ; arrangement (« Arr. Lewin for
+# Guitar », « Orchestral Version ») : une autre oeuvre pour l'oreille.
+_ACT = re.compile(r"\b(?:act|acte|akt|atto)\s*\.?\s*(?:[ivx]+|\d+)\b|\b\d+\.\s*(?:akt|act)\b", re.I)
+_ARRANGEMENT = re.compile(r"\b(?:arr|arranged|arrangement|transcr\w*|orch|orchestrated"
+                          r"|orchestral version|version for)\b", re.I)
 
 _session = requests.Session()
 _token = {"value": None, "expires": 0.0}
@@ -146,7 +157,18 @@ def _get(path, params, retries=5):
 def search(query):
     """Resultats (10 au maximum) de la recherche de morceaux, avec cache."""
     key = hashlib.md5(f"{MARKET}|{query}".encode("utf-8")).hexdigest()
-    cache = SPOTIFY_CACHE_DIR / f"search_{key}.json"
+    return _search(SPOTIFY_CACHE_DIR / f"search_{key}.json", query, "track")
+
+
+def search_artist(name):
+    """Resultats (10 au maximum) de la recherche d'artistes, avec cache.
+
+    Compte dans le meme quota que la recherche de morceaux (--max)."""
+    key = hashlib.md5(f"{MARKET}|{name}".encode("utf-8")).hexdigest()
+    return _search(SPOTIFY_CACHE_DIR / f"artist_{key}.json", name, "artist")
+
+
+def _search(cache, query, kind):
     if cache.exists():
         return json.loads(cache.read_text(encoding="utf-8"))
     if _quota["exceeded"]:
@@ -156,11 +178,11 @@ def search(query):
         raise QuotaExceeded(f"limite --max {_quota['max']} atteinte")
     _quota["requests"] += 1
     try:
-        data = _get("search", {"q": query, "type": "track", "market": MARKET, "limit": 10})
+        data = _get("search", {"q": query, "type": kind, "market": MARKET, "limit": 10})
     except QuotaExceeded:
         _quota["exceeded"] = True
         raise
-    items = [t for t in data.get("tracks", {}).get("items", []) if t]
+    items = [t for t in data.get(f"{kind}s", {}).get("items", []) if t]
     SPOTIFY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
     return items
@@ -206,13 +228,45 @@ def album_key(album):
     return title_key(_EDITION.sub(" ", str(album)))
 
 
+def _classical(track):
+    return getattr(track, "Main_Genre", None) == "Classical"
+
+
+def work_title(title):
+    """'Tosca, Act 1: Recondita armonia (Live)' -> 'Tosca, : Recondita armonia'"""
+    return " ".join(_ACT.sub(" ", re.sub(r"\(.*?\)|\[.*?\]", " ", str(title))).split())
+
+
+def same_work(song, spotify_title, composer=""):
+    """Meme oeuvre classique : tous les mots du titre du catalogue (hors
+    parentheses, acte et nom du compositeur, deja verifie par l'artiste) sont
+    dans le titre Spotify, sans arrangement que le catalogue n'annonce pas."""
+    words = set(_key(work_title(song)).split()) - set(_key(composer).split())
+    if not words or not words <= set(_key(_ACT.sub(" ", str(spotify_title))).split()):
+        return False
+    return not _ARRANGEMENT.search(str(spotify_title)) or bool(_ARRANGEMENT.search(str(song)))
+
+
 def candidates(track):
-    """Resultats de recherche pour un morceau : requete precise, puis libre."""
+    """Resultats de recherche pour un morceau : requete precise, puis libre.
+
+    Classique : sans la pochette ni l'album de 2021, le titre est cherche dans
+    cet album (meme enregistrement : « Lacrimosa » de l'album « Classic » est
+    l'arrangement pour violoncelle de HAUSER, pas un choeur) ; si rien ne
+    convient encore, une requete libre avec le titre entier (« The Four
+    Seasons - Autumn... » n'est pas « The Four Seasons »)."""
     artist = _first_artist(track.Artist)
     title = re.sub(r"\(.*?\)|\[.*?\]", " ", str(track.Song)).split(" - ")[0].strip() or str(track.Song)
     items = search(f'track:"{_quoted(title)}" artist:"{_quoted(artist)}"')
     if not items:
         items = search(f"{title} {artist}")
+    if _classical(track):
+        level = match(track, items)[0]
+        if level not in ("pochette", "album") and isinstance(track.Album, str):
+            items = items + search(f'track:"{_quoted(title)}" album:"{_quoted(track.Album)}"')
+            level = match(track, items)[0]
+        if level not in ACCEPTED:
+            items = items + search(f"{work_title(track.Song)} {artist}")
     return items
 
 
@@ -222,13 +276,16 @@ def match(track, items):
     artist = _key(_first_artist(track.Artist))
     cover = _image_id(track.Cover) if isinstance(track.Cover, str) else None
     album = album_key(track.Album) if isinstance(track.Album, str) else None
+    classical = _classical(track)
     best = {}
     for item in items:
         artists = [_key(a["name"]) for a in item.get("artists", [])]
         if not artist or not any(a and (a == artist or a in artist or artist in a) for a in artists):
             continue
         if title_key(item["name"]) != title:
-            if base and base_key(item["name"]) == base:
+            if classical and same_work(track.Song, item["name"], artist):
+                best.setdefault("oeuvre", item)
+            elif base and base_key(item["name"]) == base:
                 best.setdefault("douteux", item)
             continue
         images = {_image_id(img.get("url")) for img in item.get("album", {}).get("images", [])}
@@ -238,7 +295,7 @@ def match(track, items):
             best.setdefault("album", item)
         else:
             best.setdefault("titre", item)
-    for level in ("pochette", "album", "titre", "douteux"):
+    for level in ("pochette", "album", "titre", "oeuvre", "douteux"):
         if level in best:
             return level, best[level]
     return "aucun", None

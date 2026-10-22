@@ -1,8 +1,9 @@
 """Ecriture des genres dans data/df_recommendation.csv.
 
-Seules les colonnes Main_Genre et family_genre sont modifiees. Le fichier est
-traite comme du texte, sans passer par pandas : les autres champs restent
-identiques octet pour octet et les flottants ne sont jamais reformates.
+Seules les colonnes Main_Genre et family_genre sont modifiees (et Artist par
+write_artists, pour corriger un artiste faux). Le fichier est traite comme du
+texte, sans passer par pandas : les autres champs restent identiques octet
+pour octet et les flottants ne sont jamais reformates.
 
 Depuis le 2026-10-08, les genres sont ceux de Deezer (genre de l'album),
 choisis dans notebooks/classifieur_genre.ipynb, pour les morceaux de 2021
@@ -43,6 +44,13 @@ DEEZER_PARENT = {
     "Blues": "Jazz", "Chicago Blues": "Jazz",
     "Film Scores": "Classical", "Opera": "Classical",
 }
+# Morceaux dont l'album Deezer est faux ou mal classe : pas de genre secondaire
+# (leur genre principal est corrige dans le notebook des genres).
+SANS_GENRES_SECONDAIRES = {
+    ("Pitbull", "Greenlight (feat. Flo Rida & LunchMoney Lewis)"),  # single classe Classical, Film Scores...
+    ("Sting", "Englishman In New York"),  # trouve sur Live In Berlin (avec orchestre), classe Classical
+    ("John Cage", "4'33\""),  # trouve sur Cage Against The Machine (reprise de 2010), classe Pop
+}
 
 
 def _fields(line):
@@ -56,11 +64,50 @@ def _line(fields):
 
 
 def _cell(value):
-    """Genre -> champ CSV : vide pour un genre manquant."""
+    """Valeur -> champ CSV : vide pour une valeur manquante."""
     if pd.isna(value):
         return ""
-    assert isinstance(value, str) and value.strip() and "\n" not in value, f"genre invalide : {value!r}"
+    assert isinstance(value, str) and value.strip() and "\n" not in value, f"valeur invalide : {value!r}"
     return value
+
+
+def _write_columns(values, path):
+    """Ecrit les champs donnes, le reste du fichier a l'octet pres.
+
+    values : {colonne: Series indexee par numero de ligne du catalogue (l'index
+    de pd.read_csv)}, toutes sur les memes lignes. Les lignes absentes ne
+    changent pas. Renvoie (catalogue relu, nombre de lignes modifiees).
+    """
+    index = next(iter(values.values())).index
+    assert index.is_unique and all(v.index.equals(index) for v in values.values())
+
+    raw = path.read_bytes()
+    assert raw.endswith(b"\n") and b"\r" not in raw, "fins de ligne LF attendues"
+    lines = [line + b"\n" for line in raw.split(b"\n")[:-1]]
+    n_rows = len(lines) - 1
+    assert index.min() >= 0 and index.max() < n_rows, f"lignes du catalogue : 0 a {n_rows - 1}"
+
+    header = _fields(lines[0])
+    columns = {header.index(c): v for c, v in values.items()}
+
+    changed = 0
+    for pos in index:
+        fields = _fields(lines[pos + 1])
+        assert _line(fields) == lines[pos + 1], f"ligne {pos} non reproductible"
+        for i, v in columns.items():
+            fields[i] = _cell(v[pos])
+        new_line = _line(fields)
+        changed += new_line != lines[pos + 1]
+        lines[pos + 1] = new_line
+    out = b"".join(lines)
+
+    before, after = pd.read_csv(io.BytesIO(raw)), pd.read_csv(io.BytesIO(out))
+    assert len(before) == len(after) == n_rows, "saut de ligne dans un champ"
+    pd.testing.assert_frame_equal(before.drop(columns=list(values)),
+                                  after.drop(columns=list(values)))
+
+    path.write_bytes(out)
+    return after, changed
 
 
 def write_genres(main_genres, families=None, path=CATALOG_CSV):
@@ -73,37 +120,21 @@ def write_genres(main_genres, families=None, path=CATALOG_CSV):
     """
     if families is None:
         families = main_genres
-    assert main_genres.index.is_unique and main_genres.index.equals(families.index)
-
-    raw = path.read_bytes()
-    assert raw.endswith(b"\n") and b"\r" not in raw, "fins de ligne LF attendues"
-    lines = [line + b"\n" for line in raw.split(b"\n")[:-1]]
-    n_rows = len(lines) - 1
-    assert main_genres.index.min() >= 0 and main_genres.index.max() < n_rows, \
-        f"lignes du catalogue : 0 a {n_rows - 1}"
-
-    header = _fields(lines[0])
-    i_genre, i_family = (header.index(c) for c in GENRE_COLUMNS)
-
-    changed = 0
-    for pos in main_genres.index:
-        fields = _fields(lines[pos + 1])
-        assert _line(fields) == lines[pos + 1], f"ligne {pos} non reproductible"
-        fields[i_genre], fields[i_family] = _cell(main_genres[pos]), _cell(families[pos])
-        new_line = _line(fields)
-        changed += new_line != lines[pos + 1]
-        lines[pos + 1] = new_line
-    out = b"".join(lines)
-
-    before, after = pd.read_csv(io.BytesIO(raw)), pd.read_csv(io.BytesIO(out))
-    assert len(before) == len(after) == n_rows, "saut de ligne dans un champ"
-    pd.testing.assert_frame_equal(before.drop(columns=GENRE_COLUMNS),
-                                  after.drop(columns=GENRE_COLUMNS))
-
-    path.write_bytes(out)
+    after, changed = _write_columns(dict(zip(GENRE_COLUMNS, (main_genres, families))), path)
+    n_rows = len(after)
     print(f"{changed} lignes modifiees sur {n_rows} ; "
           f"{after['Main_Genre'].nunique()} genres ; "
           f"{after['Main_Genre'].isna().sum()} morceaux sans genre")
+    return after
+
+
+def write_artists(artists, path=CATALOG_CSV):
+    """Ecrit la colonne Artist des lignes donnees (Series indexee par numero
+    de ligne), pour corriger un artiste faux. Les vecteurs et les genres ne
+    changent pas ; la recherche du site et la recherche Spotify, si."""
+    assert artists.notna().all(), "artiste manquant"
+    after, changed = _write_columns({"Artist": artists}, path)
+    print(f"{changed} artistes modifies sur {len(after)} lignes")
     return after
 
 
@@ -138,6 +169,9 @@ def write_genre_lists(path=GENRE_LISTS_CSV):
 
     out = pd.DataFrame({"row": tags["row"], "Artist": catalog["Artist"], "Song": catalog["Song"],
                         "Genres": tags["deezer_genres"].map(to_app)})
+    ignore = pd.Series(list(zip(out["Artist"], out["Song"]))).isin(SANS_GENRES_SECONDAIRES)
+    assert ignore.sum() == len(SANS_GENRES_SECONDAIRES), "SANS_GENRES_SECONDAIRES : morceau introuvable"
+    out.loc[ignore, "Genres"] = ""
     out.to_csv(path, index=False, lineterminator="\n")
     n = out["Genres"].map(lambda s: len(s.split("|")) if s else 0)
     print(f"{path.name} : {(n >= 2).sum()} morceaux avec plusieurs genres, "
